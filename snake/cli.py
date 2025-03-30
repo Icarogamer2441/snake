@@ -29,7 +29,11 @@ def run_snake_file(file_path: str, check_only: bool = False, output_file: Option
             source_code = f.read()
         
         # Parse the Snake code - pass the file path for import resolution
-        python_ast, type_annotations = parse_snake(source_code, file_path)
+        try:
+            python_ast, type_annotations = parse_snake(source_code, file_path)
+        except SnakeSyntaxError as e:
+            print(f"Compilation error: {e}", file=sys.stderr)
+            return 1
         
         # Validate types
         type_errors = validate_types(python_ast, type_annotations)
@@ -65,9 +69,6 @@ def run_snake_file(file_path: str, check_only: bool = False, output_file: Option
         return 0
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}", file=sys.stderr)
-        return 1
-    except SnakeSyntaxError as e:
-        print(f"Syntax error: {e}", file=sys.stderr)
         return 1
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

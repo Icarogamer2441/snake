@@ -1,0 +1,10 @@
+# Test file for dictionary type checking
+
+# Correct dictionary assignment
+person: dict[str, int] = {"age": 30, "height": 180};
+
+# incorrect dictionary with mixed types
+person2: dict[str, int] = {"age": 30, "height": "180"};
+
+# correct dictionary without type annotation
+person3: dict = {"age": 30, "height": "180"};  # This should not cause a type error because the type is only dict, not dict[...]

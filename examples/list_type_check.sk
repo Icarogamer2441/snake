@@ -1,0 +1,12 @@
+# Test file for list type checking
+
+# Correct list assignment
+numbers: list[int] = [1, 2, 3, 4, 5];
+
+# Incorrect list with mixed types
+mixed: list[int] = [1, "two", 3];  # This should cause a type error
+
+# Correct list without type annotation
+combined: list = [10, "20", 30.5];  # This should not cause a type error
+
+print("Testing list type checking");

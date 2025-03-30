@@ -79,6 +79,11 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     except SyntaxError as e:
         raise SnakeSyntaxError(f"Invalid syntax: {e}", getattr(e, 'lineno', None), getattr(e, 'offset', None))
     
+    # Validate types
+    errors = validate_types(python_ast, type_annotations)
+    if errors:
+        raise SnakeSyntaxError("\n".join(errors))
+    
     return python_ast, type_annotations
 
 
@@ -360,7 +365,7 @@ def process_structs(source_code: str) -> Tuple[str, Dict[str, Any]]:
     return source_code, struct_defs
 
 
-def process_constants(source_code: str) -> Tuple[str, Dict[str, Dict[str, Any]]]:
+def process_constants(source_code: str) -> Tuple[str, Dict[str, Any]]:
     """
     Process constant definitions in the source code.
     
@@ -372,29 +377,28 @@ def process_constants(source_code: str) -> Tuple[str, Dict[str, Dict[str, Any]]]
         - Modified source code with constants converted to regular variables
         - Dictionary of constant definitions
     """
-    const_pattern = r'const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*([a-zA-Z_][a-zA-Z0-9_\.]*)\s*=\s*(.+?)(?:;|$)'
     const_defs = {}
+    modified_code = source_code
+    
+    # Regular expression to match constant definitions
+    const_pattern = r'const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]*\])?)\s*=\s*([^;]+);'
     
     # Find all constant definitions
-    matches = re.finditer(const_pattern, source_code, re.MULTILINE)
-    
-    # Replace each constant definition with a regular variable definition
-    modified_code = source_code
-    for match in matches:
+    for match in re.finditer(const_pattern, source_code):
         const_name = match.group(1)
         const_type = match.group(2)
         const_value = match.group(3)
         
-        # Store constant definition
+        # Store constant information
         const_defs[const_name] = {
             'type': const_type,
             'value': const_value,
-            'is_constant': True
+            'is_constant': True  # Mark as constant for type checking
         }
         
-        # Replace 'const' with an empty string to make it a regular variable
+        # Replace 'const' with regular variable declaration
         const_def = match.group(0)
-        var_def = const_def.replace('const ', '')
+        var_def = f"{const_name}: {const_type} = {const_value};"
         modified_code = modified_code.replace(const_def, var_def)
     
     return modified_code, const_defs
@@ -460,11 +464,417 @@ def validate_types(ast_node: ast.Module, type_annotations: Dict[str, Any]) -> Li
         List of type error messages, if any
     """
     errors = []
-    # This is a simplified type checker
-    # A real implementation would traverse the AST and validate types
+    type_checker = TypeChecker(type_annotations)
+    type_checker.visit(ast_node)
+    return type_checker.errors
+
+
+class TypeChecker(ast.NodeVisitor):
+    """AST visitor that checks type consistency."""
     
-    # For now, we'll just return an empty list
-    return errors
+    def __init__(self, type_annotations: Dict[str, Any]):
+        self.type_annotations = type_annotations
+        self.errors = []
+        self.current_function = None
+        self.variables = {}  # Track variable types in current scope
+        self.return_seen = False
+    
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Check function definition for type consistency."""
+        old_function = self.current_function
+        old_variables = self.variables.copy()
+        self.current_function = node.name
+        self.variables = {}
+        self.return_seen = False
+        
+        # Get function type information
+        func_type_info = self.type_annotations.get(node.name, {})
+        return_type = func_type_info.get('return')
+        param_types = func_type_info.get('params', {})
+        
+        # Check parameter types
+        for arg in node.args.args:
+            if hasattr(arg, 'arg') and arg.arg in param_types:
+                self.variables[arg.arg] = param_types[arg.arg]
+        
+        # Visit function body
+        for stmt in node.body:
+            self.visit(stmt)
+        
+        # Check if function with non-None return type has a return statement
+        if return_type and return_type != 'None' and not self.return_seen:
+            self.errors.append(f"Function '{node.name}' is missing a return statement")
+        
+        # Restore previous state
+        self.current_function = old_function
+        self.variables = old_variables
+    
+    def visit_Return(self, node: ast.Return) -> None:
+        """Check return statement for type consistency."""
+        self.return_seen = True
+        
+        if not self.current_function:
+            self.errors.append("Return statement outside of function")
+            return
+        
+        # Get expected return type
+        func_type_info = self.type_annotations.get(self.current_function, {})
+        expected_type = func_type_info.get('return')
+        
+        if not expected_type:
+            return
+        
+        # Check if return value matches expected type
+        if node.value:
+            actual_type = self.get_expr_type(node.value)
+            if actual_type and not self.is_compatible_type(actual_type, expected_type, node.value):
+                self.errors.append(
+                    f"Function '{self.current_function}' returns {actual_type}, "
+                    f"but its return type is {expected_type}"
+                )
+        elif expected_type != 'None':
+            self.errors.append(
+                f"Function '{self.current_function}' has no return value, "
+                f"but its return type is {expected_type}"
+            )
+    
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Check assignment for type consistency."""
+        # Visit the value first
+        self.visit(node.value)
+        
+        # Get the value type
+        value_type = self.get_expr_type(node.value)
+        
+        # Check each target
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                var_name = target.id
+                
+                # If this is the first assignment, record the type
+                if var_name not in self.variables:
+                    # Check if we have type annotation
+                    if var_name in self.type_annotations and 'type' in self.type_annotations[var_name]:
+                        expected_type = self.type_annotations[var_name]['type']
+                        self.variables[var_name] = expected_type
+                        
+                        # Check if the assigned value matches the type annotation
+                        if value_type and not self.is_compatible_type(value_type, expected_type, node.value):
+                            self.errors.append(
+                                f"Variable '{var_name}' has type {expected_type}, "
+                                f"but is assigned a value of type {value_type}"
+                            )
+                            
+                            # Check list element types if this is a list assignment
+                            if expected_type.startswith('list[') and isinstance(node.value, ast.List):
+                                self.check_list_elements(node.value, expected_type, var_name)
+                                
+                            # Check dict element types if this is a dict assignment
+                            if expected_type.startswith('dict[') and isinstance(node.value, ast.Dict):
+                                self.check_dict_elements(node.value, expected_type, var_name)
+                    else:
+                        # No type annotation, infer from value
+                        if value_type:
+                            self.variables[var_name] = value_type
+                else:
+                    # This is a reassignment, check type compatibility
+                    expected_type = self.variables[var_name]
+                    if value_type and not self.is_compatible_type(value_type, expected_type, node.value):
+                        self.errors.append(
+                            f"Variable '{var_name}' has type {expected_type}, "
+                            f"but is assigned a value of type {value_type}"
+                        )
+                        
+                        # Check list element types if this is a list assignment
+                        if expected_type.startswith('list[') and isinstance(node.value, ast.List):
+                            self.check_list_elements(node.value, expected_type, var_name)
+                            
+                        # Check dict element types if this is a dict assignment
+                        if expected_type.startswith('dict[') and isinstance(node.value, ast.Dict):
+                            self.check_dict_elements(node.value, expected_type, var_name)
+                    
+                    # Check if we're trying to reassign a constant
+                    if var_name in self.type_annotations and self.type_annotations[var_name].get('is_constant'):
+                        self.errors.append(f"Cannot reassign constant '{var_name}'")
+    
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Check annotated assignment for type consistency."""
+        # Visit the value first if it exists
+        if node.value:
+            self.visit(node.value)
+            
+        if isinstance(node.target, ast.Name):
+            var_name = node.target.id
+            
+            # Get the annotation type
+            if isinstance(node.annotation, ast.Name):
+                ann_type = node.annotation.id
+            else:
+                # Complex type annotation, use string representation
+                ann_type = ast.unparse(node.annotation)
+            
+            # Record the variable type
+            self.variables[var_name] = ann_type
+            
+            # If there's a value, check its type
+            if node.value:
+                value_type = self.get_expr_type(node.value)
+                if value_type and not self.is_compatible_type(value_type, ann_type, node.value):
+                    self.errors.append(
+                        f"Variable '{var_name}' has type {ann_type}, "
+                        f"but is assigned a value of type {value_type}"
+                    )
+                
+                # Check list element types if this is a list assignment
+                if ann_type.startswith('list[') and isinstance(node.value, ast.List):
+                    self.check_list_elements(node.value, ann_type, var_name)
+                    
+                # Check dict element types if this is a dict assignment
+                if ann_type.startswith('dict[') and isinstance(node.value, ast.Dict):
+                    self.check_dict_elements(node.value, ann_type, var_name)
+    
+    def visit_Call(self, node: ast.Call) -> None:
+        """Check function call for type consistency."""
+        # Visit arguments first
+        for arg in node.args:
+            self.visit(arg)
+        
+        # Check if this is a call to a known function
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+            
+            # Check if we have type information for this function
+            if func_name in self.type_annotations and 'params' in self.type_annotations[func_name]:
+                param_types = self.type_annotations[func_name]['params']
+                
+                # Check if the number of arguments matches
+                if len(node.args) != len(param_types):
+                    self.errors.append(
+                        f"Function '{func_name}' takes {len(param_types)} arguments, "
+                        f"but {len(node.args)} were given"
+                    )
+                    return
+                
+                # Check each argument type
+                for i, (param_name, param_type) in enumerate(param_types.items()):
+                    if i < len(node.args):
+                        arg_type = self.get_expr_type(node.args[i])
+                        if arg_type and not self.is_compatible_type(arg_type, param_type):
+                            self.errors.append(
+                                f"Argument {i+1} to function '{func_name}' has type {arg_type}, "
+                                f"but parameter '{param_name}' has type {param_type}"
+                            )
+    
+    def visit_Dict(self, node: ast.Dict) -> None:
+        """Check dictionary elements for type consistency."""
+        # Visit all keys and values
+        for key in node.keys:
+            self.visit(key)
+        for value in node.values:
+            self.visit(value)
+    
+    def visit_List(self, node: ast.List) -> None:
+        """Check list elements for type consistency."""
+        # Visit all elements
+        for elem in node.elts:
+            self.visit(elem)
+    
+    def get_expr_type(self, node: ast.expr) -> Optional[str]:
+        """Determine the type of an expression."""
+        if isinstance(node, ast.Constant):
+            # Handle literals
+            if node.value is None:
+                return 'None'
+            return type(node.value).__name__
+        
+        elif isinstance(node, ast.Name):
+            # Variable reference
+            var_name = node.id
+            
+            # Check if it's a known variable
+            if var_name in self.variables:
+                return self.variables[var_name]
+            
+            # Check if it's a variable with type annotation
+            if var_name in self.type_annotations and 'type' in self.type_annotations[var_name]:
+                return self.type_annotations[var_name]['type']
+            
+            return None
+        
+        elif isinstance(node, ast.Call):
+            # Function call
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                
+                # Check if we have return type information
+                if func_name in self.type_annotations and 'return' in self.type_annotations[func_name]:
+                    return self.type_annotations[func_name]['return']
+            
+            return None
+        
+        elif isinstance(node, ast.BinOp):
+            # Binary operation
+            left_type = self.get_expr_type(node.left)
+            right_type = self.get_expr_type(node.right)
+            
+            # Handle numeric operations
+            if isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
+                if left_type in ('int', 'float') and right_type in ('int', 'float'):
+                    # Promote to float if either operand is float
+                    if 'float' in (left_type, right_type):
+                        return 'float'
+                    return 'int'
+                
+                # String concatenation
+                if isinstance(node.op, ast.Add) and left_type == 'str' and right_type == 'str':
+                    return 'str'
+            
+            # Comparison operations
+            elif isinstance(node.op, (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+                return 'bool'
+            
+            return None
+        
+        elif isinstance(node, ast.BoolOp):
+            # Boolean operation (and, or)
+            return 'bool'
+        
+        elif isinstance(node, ast.UnaryOp):
+            # Unary operation
+            if isinstance(node.op, ast.Not):
+                return 'bool'
+            
+            operand_type = self.get_expr_type(node.operand)
+            if isinstance(node.op, (ast.UAdd, ast.USub)) and operand_type in ('int', 'float'):
+                return operand_type
+            
+            return None
+        
+        elif isinstance(node, ast.Compare):
+            # Comparison
+            return 'bool'
+        
+        elif isinstance(node, ast.List):
+            # List literal
+            if node.elts:
+                # Try to determine element type from the first element
+                elem_type = self.get_expr_type(node.elts[0])
+                if elem_type:
+                    return f'list[{elem_type}]'
+            
+            return 'list'
+        
+        elif isinstance(node, ast.Dict):
+            # Dict literal
+            if node.keys and node.values:
+                # Try to determine key and value types from the first pair
+                key_type = self.get_expr_type(node.keys[0])
+                value_type = self.get_expr_type(node.values[0])
+                if key_type and value_type:
+                    return f'dict[{key_type}, {value_type}]'
+            
+            return 'dict'
+        
+        # Add more cases as needed
+        
+        return None
+    
+    def is_compatible_type(self, actual_type: str, expected_type: str, node: Optional[ast.AST] = None) -> bool:
+        """Check if actual_type is compatible with expected_type."""
+        # Exact match
+        if actual_type == expected_type:
+            return True
+        
+        # int can be assigned to float
+        if actual_type == 'int' and expected_type == 'float':
+            return True
+        
+        # Check for generic types (e.g., list[int] is compatible with list)
+        if '[' in expected_type and expected_type.split('[')[0] == actual_type.split('[')[0]:
+            # For list types, we'll do deeper checking in check_list_elements
+            return True
+            
+        # Check if a parameterized type is assigned to a non-parameterized type
+        # For example, dict[str, int] can be assigned to dict
+        if '[' in actual_type and actual_type.split('[')[0] == expected_type:
+            return True
+        
+        # Check for struct types
+        for struct_name, struct_info in self.type_annotations.items():
+            if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                if actual_type == struct_name and expected_type == struct_name:
+                    return True
+        
+        # Check for enum types
+        for enum_name, enum_info in self.type_annotations.items():
+            if isinstance(enum_info, dict) and enum_info.get('kind') == 'enum':
+                if actual_type == enum_name and expected_type == enum_name:
+                    return True
+        
+        return False
+    
+    def check_list_elements(self, node: ast.List, expected_type: str, var_name: str) -> None:
+        """Check that all elements in a list match the expected element type."""
+        if not expected_type.startswith('list[') or not expected_type.endswith(']'):
+            return
+            
+        # Extract the expected element type
+        expected_elem_type = expected_type[5:-1]  # Remove 'list[' and ']'
+        
+        # Check each element
+        for i, elem in enumerate(node.elts):
+            elem_type = self.get_expr_type(elem)
+            if elem_type and not self.is_compatible_type(elem_type, expected_elem_type):
+                self.errors.append(
+                    f"List element at index {i} in '{var_name}' has type {elem_type}, "
+                    f"but expected {expected_elem_type}"
+                )
+    
+    def check_dict_elements(self, node: ast.Dict, expected_type: str, var_name: str) -> None:
+        """Check that all keys and values in a dict match the expected types."""
+        if not expected_type.startswith('dict[') or not expected_type.endswith(']'):
+            return
+            
+        # Extract the expected key and value types
+        type_params = expected_type[5:-1]  # Remove 'dict[' and ']'
+        
+        # Split by comma, but handle nested types with commas
+        bracket_count = 0
+        split_index = -1
+        
+        for i, char in enumerate(type_params):
+            if char == '[':
+                bracket_count += 1
+            elif char == ']':
+                bracket_count -= 1
+            elif char == ',' and bracket_count == 0:
+                split_index = i
+                break
+        
+        if split_index == -1:
+            # Malformed dict type
+            self.errors.append(f"Invalid dictionary type annotation: {expected_type}")
+            return
+            
+        expected_key_type = type_params[:split_index].strip()
+        expected_value_type = type_params[split_index+1:].strip()
+        
+        # Check each key-value pair
+        for i, (key, value) in enumerate(zip(node.keys, node.values)):
+            key_type = self.get_expr_type(key)
+            value_type = self.get_expr_type(value)
+            
+            if key_type and not self.is_compatible_type(key_type, expected_key_type):
+                self.errors.append(
+                    f"Dictionary key at index {i} in '{var_name}' has type {key_type}, "
+                    f"but expected {expected_key_type}"
+                )
+                
+            if value_type and not self.is_compatible_type(value_type, expected_value_type):
+                self.errors.append(
+                    f"Dictionary value at index {i} in '{var_name}' has type {value_type}, "
+                    f"but expected {expected_value_type}"
+                )
 
 
 def add_argc_argv(source_code: str) -> str:

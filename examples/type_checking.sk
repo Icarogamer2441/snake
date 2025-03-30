@@ -1,0 +1,73 @@
+# Example demonstrating static type checking in Snake
+
+# Function with proper type annotations
+def add(a: int, b: int) -> int:
+    return a + b;
+
+# Function with type error in return value
+def subtract(a: int, b: int) -> str:  # Return type should be int
+    return a - b;  # This will cause a type error
+
+# Function missing return statement
+def multiply(a: int, b: int) -> int:
+    if a == 0 or b == 0:
+        return 0;
+    # Missing return statement for other cases
+
+# Variable type annotations
+x: int = 10;
+y: float = 3.14;
+z: str = "hello";
+
+# Type error in variable assignment
+name: str = 42;  # This will cause a type error
+
+# Reassigning with correct type
+x = 20;  # This is fine
+
+# Reassigning with incorrect type
+y = "world";  # This will cause a type error
+
+# Constants
+const PI: float = 3.14159;
+const MAX_VALUE: int = 100;
+
+# Trying to reassign a constant
+PI = 3.14;  # This will cause a type error
+
+# Function calls with correct argument types
+result1: int = add(5, 10);
+
+# Function calls with incorrect argument types
+result2: int = add("hello", "world");  # This will cause a type error
+
+# Using a struct
+struct Point:
+    x: int;
+    y: int;
+
+# Creating a struct instance
+p: Point = Point(1, 2);
+
+# Type error with struct
+p = 42;  # This will cause a type error
+
+# Using an enum
+enum Color:
+    RED
+    GREEN
+    BLUE
+
+# Assigning enum value
+color: Color = Color.RED;
+
+# Type error with enum
+color = "RED";  # This will cause a type error
+
+# List with type annotation
+numbers: list[int] = [1, 2, 3, 4, 5];
+
+# Type error with list elements
+mixed: list[int] = [1, "two", 3];  # This will cause a type error
+
+print("This code has type errors and should not compile!");
