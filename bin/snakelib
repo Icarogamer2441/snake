@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""
+Command-line entry point for the Snake library manager.
+"""
+
+import sys
+from snake.snakelib import main
+
+if __name__ == "__main__":
+    sys.exit(main())

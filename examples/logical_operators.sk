@@ -1,0 +1,86 @@
+# Example of using logical operators in Snake
+
+# Snake supports both Python-style and C-style logical operators
+# Python-style: and, or, not
+# C-style: &&, ||, !
+
+# Function to check if a number is within a range
+def is_in_range(value: int, min_val: int, max_val: int) -> bool:
+    # Using Python-style operators
+    return value >= min_val and value <= max_val;
+
+# Function to check if a number is outside a range
+def is_outside_range(value: int, min_val: int, max_val: int) -> bool:
+    # Using C-style operators
+    return value < min_val || value > max_val;
+
+# Function to check if a number is even
+def is_even(value: int) -> bool:
+    # Using Python-style operator
+    return value % 2 == 0;
+
+# Function to check if a number is odd
+def is_odd(value: int) -> bool:
+    # Using C-style operator
+    return !(value % 2 == 0);
+
+# Function to check if a value is valid
+def is_valid(value: int) -> bool:
+    # Using mixed operators
+    return (value > 0 && value < 100) || (value == -1);
+
+# Function to check if a value is invalid
+def is_invalid(value: int) -> bool:
+    # Using mixed operators
+    return !(value > 0) || value >= 100;
+
+# Test the functions
+print("Testing logical operators in Snake");
+print("--------------------------------");
+
+# Test values
+values: list[int] = [-10, 0, 5, 50, 100, 200];
+
+# Test each value with each function
+for value in values:
+    print(f"\nTesting value: {value}");
+    print(f"  is_in_range(value, 0, 100): {is_in_range(value, 0, 100)}");
+    print(f"  is_outside_range(value, 0, 100): {is_outside_range(value, 0, 100)}");
+    print(f"  is_even(value): {is_even(value)}");
+    print(f"  is_odd(value): {is_odd(value)}");
+    print(f"  is_valid(value): {is_valid(value)}");
+    print(f"  is_invalid(value): {is_invalid(value)}");
+
+# Complex conditions with both styles
+print("\nComplex conditions:");
+
+# Using Python-style operators
+a: bool = True;
+b: bool = False;
+c: bool = True;
+result1: bool = a and (b or c);
+print(f"  a and (b or c): {result1}");
+
+# Using C-style operators
+result2: bool = a && (b || c);
+print(f"  a && (b || c): {result2}");
+
+# Mixed operators
+result3: bool = a && (b or c) && !b;
+print(f"  a && (b or c) && !b: {result3}");
+
+# Nested conditions
+def complex_check(x: int, y: int, z: int) -> bool:
+    return (x > 0 && y > 0) || (z < 0 && !(x == y));
+
+print(f"  complex_check(1, 2, -3): {complex_check(1, 2, -3)}");
+print(f"  complex_check(0, 0, -1): {complex_check(0, 0, -1)}");
+print(f"  complex_check(1, 1, -1): {complex_check(1, 1, -1)}");
+
+# String with logical operators (should not be processed)
+test_string: str = "This is a test with && and || and ! operators";
+print(f"\nString with operators: {test_string}");
+
+# Comment with logical operators (should not be processed)
+# This is a comment with && and || and ! operators
+print("Comment with operators is above this line");

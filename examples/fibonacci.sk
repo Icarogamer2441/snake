@@ -1,0 +1,14 @@
+# Fibonacci sequence implementation in Snake
+def fibonacci(n: int) -> int:
+    if n <= 1:
+        return n;
+    else:
+        return fibonacci(n-1) + fibonacci(n-2);
+
+# Calculate and print the first 10 Fibonacci numbers
+def main() -> None:
+    for i in range(10):
+        result: int = fibonacci(i);
+        print(f"fibonacci({i}) = {result}");
+
+main();

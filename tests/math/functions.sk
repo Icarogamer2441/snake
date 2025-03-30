@@ -1,0 +1,155 @@
+# Advanced math functions for Snake
+
+# Import Python libraries
+from python import numpy, math, typing;
+
+def factorial(n: int) -> int:
+    """
+    Calculate the factorial of a number.
+    
+    Args:
+        n: The number to calculate factorial for
+        
+    Returns:
+        The factorial of n
+    """
+    if n <= 1:
+        return 1;
+    return n * factorial(n - 1);
+
+def fibonacci(n: int) -> int:
+    """
+    Calculate the nth Fibonacci number.
+    
+    Args:
+        n: The position in the Fibonacci sequence
+        
+    Returns:
+        The nth Fibonacci number
+    """
+    if n <= 0:
+        return 0;
+    elif n == 1:
+        return 1;
+    return fibonacci(n - 1) + fibonacci(n - 2);
+
+def is_prime(n: int) -> bool:
+    """
+    Check if a number is prime.
+    
+    Args:
+        n: The number to check
+        
+    Returns:
+        True if the number is prime, False otherwise
+    """
+    if n <= 1:
+        return False;
+    if n <= 3:
+        return True;
+    if n % 2 == 0 or n % 3 == 0:
+        return False;
+    i: int = 5;
+    while i * i <= n:
+        if n % i == 0 or n % (i + 2) == 0:
+            return False;
+        i += 6;
+    return True;
+
+def sin(x: float) -> float:
+    """
+    Calculate the sine of an angle in radians.
+    
+    Args:
+        x: The angle in radians
+        
+    Returns:
+        The sine of the angle
+    """
+    return math.sin(x);
+
+def cos(x: float) -> float:
+    """
+    Calculate the cosine of an angle in radians.
+    
+    Args:
+        x: The angle in radians
+        
+    Returns:
+        The cosine of the angle
+    """
+    return math.cos(x);
+
+def tan(x: float) -> float:
+    """
+    Calculate the tangent of an angle in radians.
+    
+    Args:
+        x: The angle in radians
+        
+    Returns:
+        The tangent of the angle
+    """
+    return math.tan(x);
+
+def sqrt(x: float) -> float:
+    """
+    Calculate the square root of a number.
+    
+    Args:
+        x: The number to calculate the square root of
+        
+    Returns:
+        The square root of the number
+    """
+    return math.sqrt(x);
+
+def log(x: float, base: float = math.e) -> float:
+    """
+    Calculate the logarithm of a number.
+    
+    Args:
+        x: The number to calculate the logarithm of
+        base: The base of the logarithm (default: e)
+        
+    Returns:
+        The logarithm of the number
+    """
+    return math.log(x, base);
+
+# Advanced functions using numpy
+def array_sum(arr: typing.List[float]) -> float:
+    """
+    Calculate the sum of an array.
+    
+    Args:
+        arr: The array to sum
+        
+    Returns:
+        The sum of the array
+    """
+    return numpy.sum(arr);
+
+def array_mean(arr: typing.List[float]) -> float:
+    """
+    Calculate the mean of an array.
+    
+    Args:
+        arr: The array to calculate the mean of
+        
+    Returns:
+        The mean of the array
+    """
+    return numpy.mean(arr);
+
+def array_std(arr: typing.List[float]) -> float:
+    """
+    Calculate the standard deviation of an array.
+    
+    Args:
+        arr: The array to calculate the standard deviation of
+        
+    Returns:
+        The standard deviation of the array
+    """
+    return numpy.std(arr);

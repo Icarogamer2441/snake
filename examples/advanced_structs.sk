@@ -1,0 +1,71 @@
+# Advanced struct example in Snake
+
+# Define a struct for a 3D point
+struct Vector3:
+    x: float;
+    y: float;
+    z: float;
+
+# Define a struct for a color
+struct Color:
+    r: int;
+    g: int;
+    b: int;
+
+# Define a struct that uses other structs
+struct Particle:
+    position: Vector3;
+    velocity: Vector3;
+    color: Color;
+    lifetime: float;
+
+# Create some basic vectors
+zero: Vector3 = Vector3(0.0, 0.0, 0.0);
+up: Vector3 = Vector3(0.0, 1.0, 0.0);
+forward: Vector3 = Vector3(0.0, 0.0, 1.0);
+
+# Create a color
+red: Color = Color(255, 0, 0);
+
+# Create a particle
+particle: Particle = Particle(
+    Vector3(1.0, 2.0, 3.0),
+    Vector3(0.1, 0.2, 0.3),
+    Color(255, 128, 0),
+    5.0
+);
+
+# Print the structs
+print(f"Zero vector: {zero}");
+print(f"Up vector: {up}");
+print(f"Forward vector: {forward}");
+print(f"Red color: {red}");
+print(f"Particle: {particle}");
+
+# Modify struct fields
+particle.position.x = 10.0;
+particle.color.g = 255;
+
+# Print the modified particle
+print(f"Modified particle: {particle}");
+
+# Function that takes and returns structs
+def move_particle(p: Particle, delta_time: float) -> Particle:
+    new_pos: Vector3 = Vector3(
+        p.position.x + p.velocity.x * delta_time,
+        p.position.y + p.velocity.y * delta_time,
+        p.position.z + p.velocity.z * delta_time
+    );
+    
+    new_lifetime: float = p.lifetime - delta_time;
+    
+    return Particle(
+        new_pos,
+        p.velocity,
+        p.color,
+        new_lifetime
+    );
+
+# Move the particle
+updated_particle: Particle = move_particle(particle, 1.0);
+print(f"Updated particle: {updated_particle}");

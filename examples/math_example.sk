@@ -1,0 +1,45 @@
+# Example of using the math library
+
+# Import the math library
+import "math";
+from python import typing;
+
+def main() -> None:
+    # Use basic math functions
+    print("Factorial of 5:", factorial(5));
+    print("10th Fibonacci number:", fibonacci(10));
+    print("Is 17 prime?", is_prime(17));
+    
+    # Use trigonometric functions
+    print("sin(PI/2):", sin(PI/2));
+    print("cos(PI):", cos(PI));
+    print("tan(PI/4):", tan(PI/4));
+    
+    # Use logarithmic and exponential functions
+    print("sqrt(16):", sqrt(16));
+    print("log(100, 10):", log(100, 10));
+    
+    # Use array functions
+    numbers: typing.List[float] = [1.0, 2.0, 3.0, 4.0, 5.0];
+    print("Array sum:", array_sum(numbers));
+    print("Array mean:", array_mean(numbers));
+    print("Array standard deviation:", array_std(numbers));
+    
+    # Use vector operations
+    v1: Vector = Vector(1.0, 2.0, 3.0);
+    v2: Vector = Vector(4.0, 5.0, 6.0);
+    
+    print("Vector addition:", vector_add(v1, v2));
+    print("Vector subtraction:", vector_subtract(v1, v2));
+    print("Vector dot product:", vector_dot(v1, v2));
+    print("Vector cross product:", vector_cross(v1, v2));
+    print("Vector magnitude:", vector_magnitude(v1));
+    print("Normalized vector:", vector_normalize(v1));
+    
+    # Use constants
+    print("PI:", PI);
+    print("E:", E);
+    print("Golden Ratio:", GOLDEN_RATIO);
+
+# Call the main function
+main();

@@ -1,0 +1,100 @@
+# Math library for Snake
+# Main module that exports all functions
+
+# Import all functions from the functions module
+import "functions.sk";
+
+# Constants
+PI: float = 3.14159265358979323846;
+E: float = 2.71828182845904523536;
+GOLDEN_RATIO: float = 1.61803398874989484820;
+
+# Define a Vector struct for vector operations
+struct Vector:
+    x: float;
+    y: float;
+    z: float;
+
+# Vector operations
+def vector_add(v1: Vector, v2: Vector) -> Vector:
+    """
+    Add two vectors.
+    
+    Args:
+        v1: First vector
+        v2: Second vector
+        
+    Returns:
+        The sum of the two vectors
+    """
+    return Vector(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
+
+def vector_subtract(v1: Vector, v2: Vector) -> Vector:
+    """
+    Subtract two vectors.
+    
+    Args:
+        v1: First vector
+        v2: Second vector
+        
+    Returns:
+        The difference of the two vectors
+    """
+    return Vector(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
+
+def vector_dot(v1: Vector, v2: Vector) -> float:
+    """
+    Calculate the dot product of two vectors.
+    
+    Args:
+        v1: First vector
+        v2: Second vector
+        
+    Returns:
+        The dot product of the two vectors
+    """
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+
+def vector_cross(v1: Vector, v2: Vector) -> Vector:
+    """
+    Calculate the cross product of two vectors.
+    
+    Args:
+        v1: First vector
+        v2: Second vector
+        
+    Returns:
+        The cross product of the two vectors
+    """
+    return Vector(
+        v1.y * v2.z - v1.z * v2.y,
+        v1.z * v2.x - v1.x * v2.z,
+        v1.x * v2.y - v1.y * v2.x
+    );
+
+def vector_magnitude(v: Vector) -> float:
+    """
+    Calculate the magnitude of a vector.
+    
+    Args:
+        v: The vector
+        
+    Returns:
+        The magnitude of the vector
+    """
+    return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+
+def vector_normalize(v: Vector) -> Vector:
+    """
+    Normalize a vector.
+    
+    Args:
+        v: The vector to normalize
+        
+    Returns:
+        The normalized vector
+    """
+    mag: float = vector_magnitude(v);
+    if mag == 0:
+        return Vector(0, 0, 0);
+    return Vector(v.x / mag, v.y / mag, v.z / mag);

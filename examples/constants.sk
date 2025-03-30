@@ -1,0 +1,52 @@
+const PI: float = 3.14159265358979323846;
+const E: float = 2.71828182845904523536;
+const GOLDEN_RATIO: float = 1.61803398874989484820;
+
+# Integer constants
+const MAX_INT: int = 2147483647;
+const MIN_INT: int = -2147483648;
+
+# String constants
+const APP_NAME: str = "Snake Language";
+const VERSION: str = "0.1.0";
+
+# Boolean constants
+const DEBUG: bool = True;
+const PRODUCTION: bool = False;
+
+# Using constants in expressions
+const CIRCLE_AREA: float = PI * 10 * 10;  # Area of circle with radius 10
+const GREETING: str = "Welcome to " + APP_NAME + " v" + VERSION;
+
+# Using constants in functions
+def calculate_circle_area(radius: float) -> float:
+    return PI * radius * radius;
+
+def is_development() -> bool:
+    return not PRODUCTION;
+
+# Print some values
+print("Mathematical constants:");
+print("PI =", PI);
+print("E =", E);
+print("Golden Ratio =", GOLDEN_RATIO);
+print();
+
+print("Application constants:");
+print("App Name:", APP_NAME);
+print("Version:", VERSION);
+print("Debug Mode:", DEBUG);
+print("Production Mode:", PRODUCTION);
+print();
+
+print("Calculated values:");
+print("Circle Area (r=10):", CIRCLE_AREA);
+print("Circle Area (r=5):", calculate_circle_area(5));
+print("Greeting:", GREETING);
+print("Is Development?", is_development());
+
+# Constants cannot be redefined
+# PI = 3.14;  # This would cause a compile error
+
+# Constants are evaluated at compile time when possible
+const COMPUTED: int = 10 * 20 + 5;  # This becomes 205 at compile time

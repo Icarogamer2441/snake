@@ -1,0 +1,8 @@
+# in snake, static typing is required
+def add(a: int, b: int) -> int:
+    return a + b;
+
+if add(1, 2) == 3:
+    print("Hello, World!");
+else:
+    print(add(1, 2));

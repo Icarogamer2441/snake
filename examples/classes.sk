@@ -1,0 +1,21 @@
+# Example of using classes in Snake
+class Person:
+    def __init__(self, name: str, age: int) -> None:
+        self.name = name;
+        self.age = age;
+    
+    def greet(self) -> str:
+        return f"Hello, my name is {self.name} and I am {self.age} years old";
+    
+    def is_adult(self) -> bool:
+        return self.age >= 18;
+
+# Create some Person objects
+alice: Person = Person("Alice", 25);
+bob: Person = Person("Bob", 17);
+
+# Use the Person class methods
+print(alice.greet());
+print(f"Is Alice an adult? {alice.is_adult()}");
+print(bob.greet());
+print(f"Is Bob an adult? {bob.is_adult()}");

@@ -1,0 +1,19 @@
+# Math library for Snake
+# Configuration file
+
+from python import typing;
+
+# Library metadata
+name: str = "math";
+version: str = "0.1.0";
+description: str = "Advanced math functions for Snake";
+author: str = "Snake Team";
+
+# Dependencies
+dependencies: typing.List[str] = [];  # No Snake library dependencies
+
+# Python dependencies
+python_dependencies: typing.List[str] = [
+    "numpy",
+    "scipy"
+];

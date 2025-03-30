@@ -1,0 +1,31 @@
+# imports.sk - Example of using imports in Snake
+
+# Import a Snake file
+import "utils.sk";
+
+# Import Python libraries
+from python import math, random, datetime;
+
+def main() -> None:
+    # Use functions from the imported Snake file
+    result: int = add(10, 5);
+    print("10 + 5 =", result);
+    
+    result = subtract(10, 5);
+    print("10 - 5 =", result);
+    
+    # Create a Point struct from the imported file
+    p: Point = Point(3, 4);
+    print("Point:", p);
+    
+    # Use the Color enum from the imported file
+    color: Color = Color.BLUE;
+    print("Color:", color);
+    
+    # Use Python libraries
+    print("Square root of 16:", math.sqrt(16));
+    print("Random number:", random.randint(1, 100));
+    print("Current date and time:", datetime.datetime.now());
+
+# Call the main function
+main();

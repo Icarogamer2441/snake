@@ -1,0 +1,10 @@
+struct Point:
+    x: int;
+    y: int;
+
+p: Point = Point(1, 2);
+print(p.x);
+print(p.y);
+
+p.x = 3;
+print(p.x);

@@ -1,0 +1,25 @@
+enum Color:
+    RED
+    GREEN
+    BLUE
+
+# you can also create enums with values
+enum Status:
+    OK: str = "OK"
+    ERROR: str = "ERROR"
+    WARNING: str = "WARNING"
+
+print(Color.RED)
+print(Status.ERROR)
+
+status: Status = Status.OK
+color: Color = Color.BLUE
+
+print("Status: ", status)
+print("Color: ", color)
+
+# enums can also be used as function arguments
+def print_color(c: Color) -> None:
+    print(c)
+
+print_color(Color.RED)

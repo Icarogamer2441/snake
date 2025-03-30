@@ -1,0 +1,49 @@
+# Example of using command-line arguments in Snake
+
+# The argc and argv variables are automatically defined
+# argc: number of command-line arguments
+# argv: list of command-line arguments (argv[0] is the script name)
+
+# Display basic information about the arguments
+print("Command-line Arguments Example");
+print("-----------------------------");
+print("Number of arguments (argc):", argc);
+print("Arguments list (argv):", argv);
+print();
+
+# Print each argument with its index
+print("Arguments with indices:");
+for i in range(argc):
+    print(f"  argv[{i}] = {argv[i]}");
+print();
+
+# Check if specific arguments were provided
+if argc > 1:
+    print("Program was called with arguments");
+    
+    # Get the first argument after the script name
+    first_arg: str = argv[1];
+    print("First argument:", first_arg);
+    
+    # Example of using arguments for different modes
+    if first_arg == "help":
+        print("\nHelp information:");
+        print("  argcv.sk            - Run with no arguments");
+        print("  argcv.sk help       - Display this help message");
+        print("  argcv.sk version    - Display version information");
+        print("  argcv.sk calc X Y   - Calculate X + Y");
+    elif first_arg == "version":
+        print("\nSnake Arguments Example v1.0.0");
+    elif first_arg == "calc" and argc >= 4:
+        try:
+            x: float = float(argv[2]);
+            y: float = float(argv[3]);
+            print(f"\nCalculation: {x} + {y} = {x + y}");
+        except:
+            print("\nError: calc requires two numeric arguments");
+    else:
+        print(f"\nUnknown command: {first_arg}");
+        print("Use 'argcv.sk help' for usage information");
+else:
+    print("No additional arguments provided");
+    print("Try 'argcv.sk help' for usage information");
