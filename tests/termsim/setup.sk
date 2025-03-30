@@ -1,0 +1,15 @@
+# Package infos
+name: str = "termsim";
+version: str = "0.1.0";
+description: str = "A simple terminal simulator";
+author: str = "Snake Team";
+
+# Dependencies
+dependencies: list[str] = [];  # No Snake library dependencies
+
+# Python dependencies
+python_dependencies: list[str] = [];
+
+# Compilation to cmd
+
+to_cmd: list[str] = ["termsim.sk"]; # This will make that when using "termsim" command, it will run the termsim.sk from the library

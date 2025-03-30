@@ -118,7 +118,7 @@ def log(x: float, base: float = math.e) -> float:
     return math.log(x, base);
 
 # Advanced functions using numpy
-def array_sum(arr: typing.List[float]) -> float:
+def array_sum(arr: list[float]) -> float:
     """
     Calculate the sum of an array.
     
@@ -130,7 +130,7 @@ def array_sum(arr: typing.List[float]) -> float:
     """
     return numpy.sum(arr);
 
-def array_mean(arr: typing.List[float]) -> float:
+def array_mean(arr: list[float]) -> float:
     """
     Calculate the mean of an array.
     
@@ -142,7 +142,7 @@ def array_mean(arr: typing.List[float]) -> float:
     """
     return numpy.mean(arr);
 
-def array_std(arr: typing.List[float]) -> float:
+def array_std(arr: list[float]) -> float:
     """
     Calculate the standard deviation of an array.
     

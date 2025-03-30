@@ -647,8 +647,8 @@ class TypeChecker(ast.NodeVisitor):
             if func_name in self.type_annotations and 'params' in self.type_annotations[func_name]:
                 param_types = self.type_annotations[func_name]['params']
                 
-                # Check if the number of arguments matches
-                if len(node.args) != len(param_types):
+                # Check if the number of arguments matches (allowing for default parameters)
+                if len(node.args) > len(param_types):
                     self.errors.append(
                         f"Function '{func_name}' takes {len(param_types)} arguments, "
                         f"but {len(node.args)} were given"
@@ -659,10 +659,16 @@ class TypeChecker(ast.NodeVisitor):
                 for i, (param_name, param_type) in enumerate(param_types.items()):
                     if i < len(node.args):
                         arg_type = self.get_expr_type(node.args[i])
-                        if arg_type and not self.is_compatible_type(arg_type, param_type):
+                        
+                        # Extract the base type without default value
+                        base_param_type = param_type
+                        if '=' in param_type:
+                            base_param_type = param_type.split('=')[0].strip()
+                        
+                        if arg_type and not self.is_compatible_type(arg_type, base_param_type):
                             self.errors.append(
                                 f"Argument {i+1} to function '{func_name}' has type {arg_type}, "
-                                f"but parameter '{param_name}' has type {param_type}"
+                                f"but parameter '{param_name}' has type {base_param_type}"
                             )
     
     def visit_Dict(self, node: ast.Dict) -> None:
@@ -678,6 +684,23 @@ class TypeChecker(ast.NodeVisitor):
         # Visit all elements
         for elem in node.elts:
             self.visit(elem)
+    
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Check attribute access for type consistency."""
+        # Visit the value first
+        self.visit(node.value)
+        
+        # Get the type of the object being accessed
+        obj_type = self.get_expr_type(node.value)
+        
+        # Check if this is a struct field access
+        if obj_type in self.type_annotations:
+            struct_info = self.type_annotations.get(obj_type, {})
+            if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                # This is a struct, check if the attribute is a valid field
+                fields = struct_info.get('fields', {})
+                if node.attr not in fields:
+                    self.errors.append(f"Struct '{obj_type}' has no field '{node.attr}'")
     
     def get_expr_type(self, node: ast.expr) -> Optional[str]:
         """Determine the type of an expression."""
@@ -706,10 +729,19 @@ class TypeChecker(ast.NodeVisitor):
             if isinstance(node.func, ast.Name):
                 func_name = node.func.id
                 
-                # Check if we have return type information
-                if func_name in self.type_annotations and 'return' in self.type_annotations[func_name]:
-                    return self.type_annotations[func_name]['return']
+                # Check if this is a struct constructor
+                if func_name in self.type_annotations:
+                    struct_info = self.type_annotations.get(func_name, {})
+                    if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                        # Check struct constructor arguments
+                        self.check_struct_fields(node, func_name, func_name)
+                        return func_name
+                
+                # Regular function call
+                func_info = self.type_annotations.get(func_name, {})
+                return func_info.get('return')
             
+            # Method call or other complex call
             return None
         
         elif isinstance(node, ast.BinOp):
@@ -774,6 +806,20 @@ class TypeChecker(ast.NodeVisitor):
                     return f'dict[{key_type}, {value_type}]'
             
             return 'dict'
+        
+        elif isinstance(node, ast.Attribute):
+            # Attribute access (e.g., obj.attr)
+            value_type = self.get_expr_type(node.value)
+            
+            # Check if this is a struct field access
+            if value_type in self.type_annotations:
+                struct_info = self.type_annotations.get(value_type, {})
+                if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                    fields = struct_info.get('fields', {})
+                    if node.attr in fields:
+                        return fields[node.attr]
+            
+            return None
         
         # Add more cases as needed
         
@@ -874,6 +920,35 @@ class TypeChecker(ast.NodeVisitor):
                 self.errors.append(
                     f"Dictionary value at index {i} in '{var_name}' has type {value_type}, "
                     f"but expected {expected_value_type}"
+                )
+    
+    def check_struct_fields(self, node: ast.Call, struct_name: str, var_name: str) -> None:
+        """Check that struct constructor arguments match the expected field types."""
+        # Get struct definition
+        struct_info = self.type_annotations.get(struct_name, {})
+        if not isinstance(struct_info, dict) or struct_info.get('kind') != 'struct':
+            return
+            
+        fields = struct_info.get('fields', {})
+        
+        # Check if the number of arguments matches the number of fields
+        if len(node.args) != len(fields):
+            self.errors.append(
+                f"Struct '{struct_name}' constructor expects {len(fields)} arguments, "
+                f"but got {len(node.args)}"
+            )
+            return
+            
+        # Check each argument type
+        field_names = list(fields.keys())
+        for i, (field_name, arg) in enumerate(zip(field_names, node.args)):
+            expected_type = fields[field_name]
+            arg_type = self.get_expr_type(arg)
+            
+            if arg_type and not self.is_compatible_type(arg_type, expected_type):
+                self.errors.append(
+                    f"Field '{field_name}' in struct '{struct_name}' has type {expected_type}, "
+                    f"but is assigned a value of type {arg_type}"
                 )
 
 

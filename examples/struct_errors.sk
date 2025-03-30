@@ -1,0 +1,31 @@
+# Struct type checking error examples
+
+struct Point:
+    x: int;
+    y: int;
+
+struct Person:
+    name: str;
+    age: int;
+
+# Correct usage for reference
+valid_point: Point = Point(10, 20);
+valid_person: Person = Person("Alice", 30);
+
+# Type error: Wrong type for x (string instead of int)
+error_point: Point = Point("10", 20);
+
+# Type error: Wrong number of arguments
+error_person1: Person = Person("Bob");
+
+# Type error: Wrong type for age (float instead of int)
+error_person2: Person = Person("Charlie", 25.5);
+
+# Type error: Accessing non-existent field
+print(valid_point.z);
+
+# Type error: Assigning wrong type to field
+valid_point.x = "hello";
+
+# Type error: Assigning to non-existent field
+valid_point.z = 30;

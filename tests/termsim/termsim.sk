@@ -1,0 +1,38 @@
+from python import platform, os;
+
+print("Welcome to termsim!");
+
+print("Enter 'exit' to quit.")
+
+def clear() -> None:
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
+
+while True:
+    user_input: str = input("Enter a command: ")
+    if user_input == "exit":
+        break
+    splitted: list[str] = user_input.split()
+    command: str = splitted[0]
+    args: list[str] = splitted[1:]
+    if command == "echo":
+        print(" ".join(args))
+    elif command == "help":
+        print("Available commands:")
+        print("- echo: Print a message")
+        print("- exit: Exit the program")
+        print("- help: Show this help message")
+        print("- snake: Shows a secret message")
+        print("- clear: Clear the terminal")
+    elif command == "snake":
+        print("Welcome to Snake!")
+        print("You found a secret message!")
+    elif command == "clear":
+        clear()
+    else:
+        print(f"Unknown command: {command}")
+
+# sys is not imported here, but in the output code it is, so i can use sys.exit()!
+sys.exit(0)

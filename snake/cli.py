@@ -88,21 +88,27 @@ def main(args: Optional[List[str]] = None) -> int:
     if args is None:
         args = sys.argv[1:]
     
-    # Create a parser that captures only the known arguments
+    # Create a parser with version as a standalone argument
     parser = argparse.ArgumentParser(description="Snake programming language")
-    parser.add_argument("file", help="Snake source file to run")
-    parser.add_argument("--check", action="store_true", help="Check for errors without running")
     parser.add_argument("--version", action="store_true", help="Show version information")
-    parser.add_argument("-o", "--output", help="Save the generated Python code to the specified file")
     
-    # Parse known arguments, leaving the rest for the Snake script
-    parsed_args, script_args = parser.parse_known_args(args)
+    # First check if --version is in the arguments
+    parsed_args, remaining_args = parser.parse_known_args(args)
     
-    # Show version and exit
+    # Show version and exit if --version flag is present
     if parsed_args.version:
         from . import __version__
         print(f"Snake version {__version__}")
         return 0
+    
+    # If we're still here, create a new parser for the rest of the arguments
+    file_parser = argparse.ArgumentParser(description="Snake programming language")
+    file_parser.add_argument("file", help="Snake source file to run")
+    file_parser.add_argument("--check", action="store_true", help="Check for errors without running")
+    file_parser.add_argument("-o", "--output", help="Save the generated Python code to the specified file")
+    
+    # Parse known arguments, leaving the rest for the Snake script
+    parsed_args, script_args = file_parser.parse_known_args(remaining_args)
     
     # Save the original sys.argv
     original_argv = sys.argv.copy()

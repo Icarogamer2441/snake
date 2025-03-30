@@ -1,0 +1,54 @@
+from python import os;
+
+os.system("clear")
+
+print("Running all tests...")
+
+# run all tests
+
+if os.system("snake examples/hello.sk") != 0:
+    print("Test failed: hello.sk")
+    sys.exit(1)
+if os.system("snake examples/logical_operators.sk") != 0:
+    print("Test failed: logical_operators.sk")
+    sys.exit(1)
+if os.system("snake examples/enums.sk") != 0:
+    print("Test failed: enums.sk")
+    sys.exit(1)
+if os.system("snake examples/list_type_check.sk") != 0:
+    print("Test failed (as expected): list_type_check.sk")
+if os.system("snake examples/math_example.sk") != 0:
+    print("Test failed: math_example.sk")
+    sys.exit(1)
+if os.system("snake examples/structs.sk") != 0:
+    print("Test failed: structs.sk")
+    sys.exit(1)
+if os.system("snake examples/imports.sk") != 0:
+    print("Test failed: imports.sk")
+    sys.exit(1)
+if os.system("snake examples/dict_type_check.sk") != 0:
+    print("Test failed (as expected): dict_type_check.sk")
+if os.system("snake examples/type_check.sk") != 0:
+    print("Test failed (as expected): type_check.sk")
+if os.system("snake examples/argcv.sk test debug") != 0:
+    print("Test failed: argcv.sk")
+    sys.exit(1)
+if os.system("snake examples/fibonacci.sk") != 0:
+    print("Test failed: fibonacci.sk")
+    sys.exit(1)
+if os.system("snake examples/constants.sk") != 0:
+    print("Test failed: constants.sk")
+    sys.exit(1)
+if os.system("snake examples/classes.sk") != 0:
+    print("Test failed: classes.sk")
+    sys.exit(1)
+if os.system("snake examples/advanced_structs.sk") != 0:
+    print("Test failed: advanced_structs.sk")
+    sys.exit(1)
+if os.system("snake examples/struct_errors.sk") != 0:
+    print("Test failed (as expected): struct_errors.sk")
+if os.system("snake examples/simple_struct.sk") != 0:
+    print("Test failed: simple_struct.sk")
+    sys.exit(1)
+
+print("All tests passed!")

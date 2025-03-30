@@ -17,10 +17,10 @@ def main() -> None:
     
     # Use logarithmic and exponential functions
     print("sqrt(16):", sqrt(16));
-    print("log(100, 10):", log(100, 10));
+    print("log(100, 10.0):", log(100, 10.0));  # Changed 10 to 10.0 to match float type
     
     # Use array functions
-    numbers: typing.List[float] = [1.0, 2.0, 3.0, 4.0, 5.0];
+    numbers: list[float] = [1.0, 2.0, 3.0, 4.0, 5.0];  # Changed typing.List[float] to list[float]
     print("Array sum:", array_sum(numbers));
     print("Array mean:", array_mean(numbers));
     print("Array standard deviation:", array_std(numbers));
