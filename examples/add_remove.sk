@@ -1,0 +1,15 @@
+mystr: str = "Hello";
+print(mystr);
+mystr.add(" World");
+
+print(mystr);
+
+mystr.remove("Hello");
+
+print(mystr);
+
+print("\nMore tests:");
+print("Hello".add(" World"));
+print("Hello World".remove("Hello W"));
+print(mystr.add(" HELLO"));
+print(mystr.remove(" Wo"));

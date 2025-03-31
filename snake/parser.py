@@ -58,6 +58,9 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process increment/decrement operators
     source_code = process_increment_decrement(source_code)
     
+    # Process custom string methods
+    source_code = process_string_methods(source_code)
+    
     # Process string format method
     source_code = process_string_format(source_code)
     
@@ -1097,6 +1100,102 @@ class All:
     return helper_functions + processed_code
 
 
+def process_string_methods(source_code: str) -> str:
+    """
+    Process custom string methods (.add() and .remove()) in the source code.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with custom string methods processed
+    """
+    # Add string helper functions
+    helper_functions = """
+# String helper functions
+def __snake_string_add(string, value):
+    return string + value
+
+def __snake_string_remove(string, value):
+    return string.replace(value, "")
+
+"""
+    
+    # Process each line to handle string methods
+    lines = source_code.split('\n')
+    processed_lines = []
+    
+    for line in lines:
+        # Skip processing if the line is a comment
+        if line.strip().startswith('#'):
+            processed_lines.append(line)
+            continue
+        
+        # Process standalone variable.add() statements first
+        standalone_add_match = re.search(r'^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*add\s*\(\s*(.*?)\s*\)\s*;', line)
+        if standalone_add_match:
+            indent = standalone_add_match.group(1)
+            var_name = standalone_add_match.group(2)
+            value = standalone_add_match.group(3)
+            processed_lines.append(f"{indent}{var_name} = {var_name} + {value};")
+            continue
+        
+        # Process standalone variable.remove() statements
+        standalone_remove_match = re.search(r'^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*remove\s*\(\s*(.*?)\s*\)\s*;', line)
+        if standalone_remove_match:
+            indent = standalone_remove_match.group(1)
+            var_name = standalone_remove_match.group(2)
+            value = standalone_remove_match.group(3)
+            processed_lines.append(f"{indent}{var_name} = {var_name}.replace({value}, \"\");")
+            continue
+        
+        # Process .add() method in expressions
+        processed_line = line
+        add_expr_matches = list(re.finditer(r'([A-Za-z_][A-Za-z0-9_]*|"[^"]*"|\'[^\']*\')\s*\.\s*add\s*\(\s*(.*?)\s*\)', processed_line))
+        for match in reversed(add_expr_matches):  # Process in reverse to avoid messing up positions
+            expr = match.group(1)
+            value = match.group(2)
+            start, end = match.span()
+            processed_line = processed_line[:start] + f"__snake_string_add({expr}, {value})" + processed_line[end:]
+        
+        # Process .remove() method in expressions
+        remove_expr_matches = list(re.finditer(r'([A-Za-z_][A-Za-z0-9_]*|"[^"]*"|\'[^\']*\')\s*\.\s*remove\s*\(\s*(.*?)\s*\)', processed_line))
+        for match in reversed(remove_expr_matches):  # Process in reverse to avoid messing up positions
+            expr = match.group(1)
+            value = match.group(2)
+            start, end = match.span()
+            processed_line = processed_line[:start] + f"__snake_string_remove({expr}, {value})" + processed_line[end:]
+        
+        processed_lines.append(processed_line)
+    
+    return helper_functions + '\n'.join(processed_lines)
+
+
+def process_string_format(source_code: str) -> str:
+    """
+    Process string format method (.f()) in the source code.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with .f() method replaced with .format()
+    """
+    # Add string format helper function
+    helper_function = """
+# String format helper function
+def __snake_format(string, *args, **kwargs):
+    return string.format(*args, **kwargs)
+
+"""
+    
+    # Replace .f() with .format()
+    format_pattern = r'\.f\('
+    source_code = re.sub(format_pattern, '.format(', source_code)
+    
+    return helper_function + source_code
+
+
 def optimize_python_code(python_code: str) -> str:
     """
     Optimize the generated Python code to make it smaller and more efficient.
@@ -1225,6 +1324,9 @@ def parse_snake_code(source_code: str) -> str:
     
     # Process increment/decrement operators
     source_code = process_increment_decrement(source_code)
+    
+    # Process custom string methods
+    source_code = process_string_methods(source_code)
     
     # Process string format method
     source_code = process_string_format(source_code)

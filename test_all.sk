@@ -59,6 +59,9 @@ if os.system("snake examples/all_type_vars.sk") != 0:
 if os.system("snake examples/incdec.sk") != 0:
     print("Test failed: incdec.sk");
     sys.exit(1);
+if os.system("snake examples/add_remove.sk") != 0:
+    print("Test failed: add_remove.sk");
+    sys.exit(1);
 
 print("All tests passed!");
 sys.exit(0);
