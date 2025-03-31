@@ -49,10 +49,13 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process constant definitions
     source_code, const_defs = process_constants(source_code)
     
+    # Process type casts
+    source_code = process_type_casts(source_code)
+    
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
-    # Add argc and argv to the source code
+    # Add command-line arguments
     source_code = add_argc_argv(source_code)
     
     # Remove semicolons at the end of lines
@@ -1001,9 +1004,6 @@ def process_logical_operators(source_code: str) -> str:
     Returns:
         Modified source code with logical operators processed
     """
-    # Replace logical operators with their Python equivalents
-    # We need to be careful with the replacements to avoid affecting strings and comments
-    
     # Function to process a single line
     def process_line(line):
         # Skip processing if the line is a comment or a string
@@ -1078,3 +1078,59 @@ def process_logical_operators(source_code: str) -> str:
     processed_lines = [process_line(line) for line in lines]
     
     return '\n'.join(processed_lines)
+
+
+def process_type_casts(source_code: str) -> str:
+    """
+    Process type cast expressions in the source code.
+    Converts C-style type casts (e.g., (int)a) to Python function calls.
+    Also handles dictionary-to-struct conversions (e.g., (Point){"x": 1, "y": 2}).
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with type casts processed
+    """
+    # Add helper functions at the beginning of the code
+    helper_functions = """
+# Helper functions for type casting
+def __snake_cast(value, target_type):
+    if target_type == int:
+        return int(value)
+    elif target_type == float:
+        return float(value)
+    elif target_type == str:
+        return str(value)
+    elif target_type == bool:
+        return bool(value)
+    else:
+        return target_type(value)
+
+def __snake_cast_dict_to_struct(struct_type, dict_value):
+    # Create an instance of the struct with default values
+    instance = struct_type.__new__(struct_type)
+    
+    # Set the fields from the dictionary
+    for key, value in dict_value.items():
+        setattr(instance, key, value)
+    
+    return instance
+
+"""
+    
+    # Regular expression to match type casts: (Type)expr
+    # This regex captures the type name and the expression being cast
+    type_cast_pattern = r'\(([A-Za-z_][A-Za-z0-9_]*)\)([A-Za-z_][A-Za-z0-9_]*)'
+    
+    # Replace type casts with function calls
+    processed_code = re.sub(type_cast_pattern, r'__snake_cast(\2, \1)', source_code)
+    
+    # Regular expression to match dictionary-to-struct conversions: (Type){...}
+    # This is more complex because we need to capture the type and the dictionary literal
+    struct_cast_pattern = r'\(([A-Za-z_][A-Za-z0-9_]*)\)(\{[^}]*\})'
+    
+    # Replace struct casts with function calls
+    processed_code = re.sub(struct_cast_pattern, r'__snake_cast_dict_to_struct(\1, \2)', processed_code)
+    
+    return helper_functions + processed_code

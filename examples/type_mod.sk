@@ -1,0 +1,13 @@
+a: str = "10";
+
+b: int = (int)a;
+
+print(b);
+
+struct Point:
+    x: int;
+    y: int;
+
+p: Point = (Point){"x": 1, "y": 2};
+
+print(p.x, p.y);
