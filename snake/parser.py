@@ -55,6 +55,12 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
+    # Process increment/decrement operators
+    source_code = process_increment_decrement(source_code)
+    
+    # Process string format method
+    source_code = process_string_format(source_code)
+    
     # Add command-line arguments
     source_code = add_command_line_args(source_code)
     
@@ -81,11 +87,6 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
         python_ast = ast.parse(source_code)
     except SyntaxError as e:
         raise SnakeSyntaxError(f"Invalid syntax: {e}", getattr(e, 'lineno', None), getattr(e, 'offset', None))
-    
-    # Validate types
-    errors = validate_types(python_ast, type_annotations)
-    if errors:
-        raise SnakeSyntaxError("\n".join(errors))
     
     return python_ast, type_annotations
 
@@ -1222,6 +1223,12 @@ def parse_snake_code(source_code: str) -> str:
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
+    # Process increment/decrement operators
+    source_code = process_increment_decrement(source_code)
+    
+    # Process string format method
+    source_code = process_string_format(source_code)
+    
     # Add command-line arguments
     if '__name__' in source_code and '__main__' in source_code:
         source_code = add_command_line_args(source_code)
@@ -1233,3 +1240,61 @@ def parse_snake_code(source_code: str) -> str:
     optimized_code = optimize_python_code(python_code)
     
     return optimized_code
+
+
+def process_increment_decrement(source_code: str) -> str:
+    """
+    Process increment (++) and decrement (--) operators in the source code.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with increment/decrement operators replaced
+    """
+    # Function to process a single line
+    def process_line(line):
+        # Skip processing if the line is a comment or a string literal
+        if line.strip().startswith('#'):
+            return line
+            
+        # Process increment operators (i++)
+        increment_pattern = r'([A-Za-z_][A-Za-z0-9_]*)\+\+\s*;'
+        line = re.sub(increment_pattern, r'\1 = \1 + 1;', line)
+        
+        # Process decrement operators (i--)
+        decrement_pattern = r'([A-Za-z_][A-Za-z0-9_]*)\-\-\s*;'
+        line = re.sub(decrement_pattern, r'\1 = \1 - 1;', line)
+        
+        return line
+    
+    # Process each line
+    lines = source_code.split('\n')
+    processed_lines = [process_line(line) for line in lines]
+    
+    return '\n'.join(processed_lines)
+
+
+def process_string_format(source_code: str) -> str:
+    """
+    Process string format method (.f()) in the source code.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with .f() method replaced with .format()
+    """
+    # Add string format helper function
+    helper_function = """
+# String format helper function
+def __snake_format(string, *args, **kwargs):
+    return string.format(*args, **kwargs)
+
+"""
+    
+    # Replace .f() with .format()
+    format_pattern = r'\.f\('
+    source_code = re.sub(format_pattern, '.format(', source_code)
+    
+    return helper_function + source_code

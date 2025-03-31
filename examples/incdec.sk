@@ -1,0 +1,8 @@
+i: int = 0;
+# you can use .f to format strings (.f is an abbreviation of .format)
+print("I = {}".f(i));
+i++;
+print("I = {}".f(i));
+
+i--;
+print("I = {}".f(i));
