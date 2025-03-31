@@ -1,0 +1,27 @@
+# you know that you NEED to have static typing, right?
+# how about this?
+x: All = 5;
+# now you can have variables of any type
+print(type(x));
+
+x = "hello";
+print(type(x));
+
+# for being a type, you can use in functions, structures and etc
+
+def test(x: All) -> All: # for being all, you can use when it returns None
+    print("Type:", type(x));
+    return None;
+
+test(5);
+test("hello");
+
+def test2(x: All) -> All: # -> def test2(x):
+    return x; # -> return x
+
+struct Point:
+    x: All;
+    y: All;
+
+p: All = Point(5, "hello");
+print(p.x, p.y);

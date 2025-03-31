@@ -56,7 +56,7 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     source_code = process_logical_operators(source_code)
     
     # Add command-line arguments
-    source_code = add_argc_argv(source_code)
+    source_code = add_command_line_args(source_code)
     
     # Remove semicolons at the end of lines
     source_code = re.sub(r';(\s*\n|\s*$)', r'\1', source_code)
@@ -622,7 +622,7 @@ class TypeChecker(ast.NodeVisitor):
             # If there's a value, check its type
             if node.value:
                 value_type = self.get_expr_type(node.value)
-                if value_type and not self.is_compatible_type(value_type, ann_type, node.value):
+                if value_type and not self.is_compatible_type(value_type, ann_type):
                     self.errors.append(
                         f"Variable '{var_name}' has type {ann_type}, "
                         f"but is assigned a value of type {value_type}"
@@ -830,6 +830,14 @@ class TypeChecker(ast.NodeVisitor):
     
     def is_compatible_type(self, actual_type: str, expected_type: str, node: Optional[ast.AST] = None) -> bool:
         """Check if actual_type is compatible with expected_type."""
+        # All type is compatible with everything
+        if expected_type == 'All':
+            return True
+            
+        # Any type can be assigned to All
+        if actual_type == 'All':
+            return True
+            
         # Exact match
         if actual_type == expected_type:
             return True
@@ -870,6 +878,10 @@ class TypeChecker(ast.NodeVisitor):
         # Extract the expected element type
         expected_elem_type = expected_type[5:-1]  # Remove 'list[' and ']'
         
+        # If the expected element type is All, all elements are valid
+        if expected_elem_type == 'All':
+            return
+            
         # Check each element
         for i, elem in enumerate(node.elts):
             elem_type = self.get_expr_type(elem)
@@ -908,18 +920,22 @@ class TypeChecker(ast.NodeVisitor):
         expected_key_type = type_params[:split_index].strip()
         expected_value_type = type_params[split_index+1:].strip()
         
+        # If either expected type is All, skip checking for that part
+        check_keys = expected_key_type != 'All'
+        check_values = expected_value_type != 'All'
+        
         # Check each key-value pair
         for i, (key, value) in enumerate(zip(node.keys, node.values)):
             key_type = self.get_expr_type(key)
             value_type = self.get_expr_type(value)
             
-            if key_type and not self.is_compatible_type(key_type, expected_key_type):
+            if check_keys and key_type and not self.is_compatible_type(key_type, expected_key_type):
                 self.errors.append(
                     f"Dictionary key at index {i} in '{var_name}' has type {key_type}, "
                     f"but expected {expected_key_type}"
                 )
                 
-            if value_type and not self.is_compatible_type(value_type, expected_value_type):
+            if check_values and value_type and not self.is_compatible_type(value_type, expected_value_type):
                 self.errors.append(
                     f"Dictionary value at index {i} in '{var_name}' has type {value_type}, "
                     f"but expected {expected_value_type}"
@@ -946,6 +962,11 @@ class TypeChecker(ast.NodeVisitor):
         field_names = list(fields.keys())
         for i, (field_name, arg) in enumerate(zip(field_names, node.args)):
             expected_type = fields[field_name]
+            
+            # Skip type checking for fields with All type
+            if expected_type == 'All':
+                continue
+                
             arg_type = self.get_expr_type(arg)
             
             if arg_type and not self.is_compatible_type(arg_type, expected_type):
@@ -955,7 +976,7 @@ class TypeChecker(ast.NodeVisitor):
                 )
 
 
-def add_argc_argv(source_code: str) -> str:
+def add_command_line_args(source_code: str) -> str:
     """
     Add argc and argv variables to the source code.
     
@@ -995,89 +1016,24 @@ argc = len(argv)
 
 def process_logical_operators(source_code: str) -> str:
     """
-    Process logical operators in the source code.
-    Converts C-style operators (&&, ||, !) to Python-style operators (and, or, not).
+    Process logical operators (&&, ||, !) in the source code.
     
     Args:
         source_code: The Snake source code
         
     Returns:
-        Modified source code with logical operators processed
+        Modified source code with logical operators replaced
     """
-    # Function to process a single line
-    def process_line(line):
-        # Skip processing if the line is a comment or a string
-        if line.strip().startswith('#'):
-            return line
-        
-        # We'll use a state machine to track strings
-        in_single_quote = False
-        in_double_quote = False
-        in_triple_single_quote = False
-        in_triple_double_quote = False
-        i = 0
-        result = []
-        
-        while i < len(line):
-            # Check for string boundaries
-            if i + 2 < len(line) and line[i:i+3] == '"""' and not in_single_quote and not in_triple_single_quote:
-                in_triple_double_quote = not in_triple_double_quote
-                result.append(line[i:i+3])
-                i += 3
-                continue
-            elif i + 2 < len(line) and line[i:i+3] == "'''" and not in_double_quote and not in_triple_double_quote:
-                in_triple_single_quote = not in_triple_single_quote
-                result.append(line[i:i+3])
-                i += 3
-                continue
-            elif line[i] == '"' and not in_single_quote and not in_triple_single_quote and not in_triple_double_quote:
-                # Check if it's not escaped
-                if i == 0 or line[i-1] != '\\':
-                    in_double_quote = not in_double_quote
-                result.append(line[i])
-                i += 1
-                continue
-            elif line[i] == "'" and not in_double_quote and not in_triple_double_quote and not in_triple_single_quote:
-                # Check if it's not escaped
-                if i == 0 or line[i-1] != '\\':
-                    in_single_quote = not in_single_quote
-                result.append(line[i])
-                i += 1
-                continue
-            
-            # If we're in a string, don't process operators
-            if in_single_quote or in_double_quote or in_triple_single_quote or in_triple_double_quote:
-                result.append(line[i])
-                i += 1
-                continue
-            
-            # Process logical operators
-            if i + 1 < len(line) and line[i:i+2] == '&&':
-                result.append(' and ')
-                i += 2
-            elif i + 1 < len(line) and line[i:i+2] == '||':
-                result.append(' or ')
-                i += 2
-            elif line[i] == '!' and (i == 0 or not line[i-1].isalnum()):
-                # Make sure we're not in the middle of a word or number
-                # And not part of a not-equal operator (!=)
-                if i + 1 < len(line) and line[i+1] != '=':
-                    result.append('not ')
-                    i += 1
-                else:
-                    result.append(line[i])
-                    i += 1
-            else:
-                result.append(line[i])
-                i += 1
-        
-        return ''.join(result)
+    # Replace && with and
+    source_code = re.sub(r'(\s)&&(\s)', r'\1and\2', source_code)
     
-    # Process each line
-    lines = source_code.split('\n')
-    processed_lines = [process_line(line) for line in lines]
+    # Replace || with or
+    source_code = re.sub(r'(\s)\|\|(\s)', r'\1or\2', source_code)
     
-    return '\n'.join(processed_lines)
+    # Replace ! with not (but not !=)
+    source_code = re.sub(r'(\s)!([^=])', r'\1not \2', source_code)
+    
+    return source_code
 
 
 def process_type_casts(source_code: str) -> str:
@@ -1117,6 +1073,10 @@ def __snake_cast_dict_to_struct(struct_type, dict_value):
     
     return instance
 
+# Define the All type (equivalent to Python's Any type)
+class All:
+    pass
+
 """
     
     # Regular expression to match type casts: (Type)expr
@@ -1134,3 +1094,142 @@ def __snake_cast_dict_to_struct(struct_type, dict_value):
     processed_code = re.sub(struct_cast_pattern, r'__snake_cast_dict_to_struct(\1, \2)', processed_code)
     
     return helper_functions + processed_code
+
+
+def optimize_python_code(python_code: str) -> str:
+    """
+    Optimize the generated Python code to make it smaller and more efficient.
+    
+    Args:
+        python_code: The generated Python code
+        
+    Returns:
+        Optimized Python code
+    """
+    # Remove unnecessary whitespace
+    lines = python_code.split('\n')
+    optimized_lines = []
+    
+    # Track imports to consolidate them
+    imports = {}
+    import_pattern = re.compile(r'^import\s+(\w+)$')
+    from_import_pattern = re.compile(r'^from\s+(\w+)\s+import\s+(.+)$')
+    
+    for line in lines:
+        # Skip empty lines
+        if not line.strip():
+            continue
+            
+        # Consolidate imports
+        import_match = import_pattern.match(line.strip())
+        if import_match:
+            module = import_match.group(1)
+            if module not in imports:
+                imports[module] = {'type': 'import', 'items': []}
+            continue
+            
+        from_import_match = from_import_pattern.match(line.strip())
+        if from_import_match:
+            module = from_import_match.group(1)
+            items = [item.strip() for item in from_import_match.group(2).split(',')]
+            
+            if module not in imports:
+                imports[module] = {'type': 'from_import', 'items': []}
+            
+            for item in items:
+                if item not in imports[module]['items']:
+                    imports[module]['items'].append(item)
+            continue
+        
+        # Add non-import lines to the optimized code
+        optimized_lines.append(line)
+    
+    # Reconstruct the optimized code with consolidated imports
+    consolidated_imports = []
+    for module, info in imports.items():
+        if info['type'] == 'import':
+            consolidated_imports.append(f"import {module}")
+        else:  # from_import
+            items = ', '.join(sorted(info['items']))
+            consolidated_imports.append(f"from {module} import {items}")
+    
+    # Add the consolidated imports at the beginning of the file
+    optimized_code = '\n'.join(consolidated_imports + [''] + optimized_lines)
+    
+    # Remove redundant parentheses
+    optimized_code = re.sub(r'\(\(([^()]*)\)\)', r'(\1)', optimized_code)
+    
+    # Simplify boolean expressions
+    optimized_code = re.sub(r'True\s+==\s+True', 'True', optimized_code)
+    optimized_code = re.sub(r'False\s+==\s+False', 'True', optimized_code)
+    optimized_code = re.sub(r'True\s+==\s+False', 'False', optimized_code)
+    optimized_code = re.sub(r'False\s+==\s+True', 'False', optimized_code)
+    
+    # Simplify not expressions
+    optimized_code = re.sub(r'not\s+False', 'True', optimized_code)
+    optimized_code = re.sub(r'not\s+True', 'False', optimized_code)
+    
+    # Simplify if conditions
+    optimized_code = re.sub(r'if\s+True\s*:', 'if True:', optimized_code)
+    optimized_code = re.sub(r'if\s+False\s*:', 'if False:', optimized_code)
+    
+    # Remove unnecessary pass statements in non-empty blocks
+    lines = optimized_code.split('\n')
+    i = 0
+    while i < len(lines) - 1:
+        if lines[i].strip().endswith(':') and 'pass' in lines[i+1] and i+2 < len(lines) and lines[i+2].strip():
+            lines.pop(i+1)  # Remove the pass line
+        else:
+            i += 1
+    
+    # Join the lines back together
+    optimized_code = '\n'.join(lines)
+    
+    # Optimize multiple consecutive blank lines into a single blank line
+    optimized_code = re.sub(r'\n\s*\n\s*\n+', '\n\n', optimized_code)
+    
+    # Remove trailing whitespace
+    optimized_code = re.sub(r'[ \t]+$', '', optimized_code, flags=re.MULTILINE)
+    
+    return optimized_code
+
+
+def parse_snake_code(source_code: str) -> str:
+    """
+    Parse Snake code and convert it to Python.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        The equivalent Python code
+    """
+    # Process imports
+    source_code, imports = process_imports(source_code)
+    
+    # Process enum definitions
+    source_code, enum_defs = process_enums(source_code)
+    
+    # Process struct definitions
+    source_code, struct_defs = process_structs(source_code)
+    
+    # Process constant definitions
+    source_code, const_defs = process_constants(source_code)
+    
+    # Process type casts
+    source_code = process_type_casts(source_code)
+    
+    # Process logical operators
+    source_code = process_logical_operators(source_code)
+    
+    # Add command-line arguments
+    if '__name__' in source_code and '__main__' in source_code:
+        source_code = add_command_line_args(source_code)
+    
+    # Generate the Python code
+    python_code = generate_python_code(source_code, imports, enum_defs, struct_defs, const_defs)
+    
+    # Optimize the generated Python code
+    optimized_code = optimize_python_code(python_code)
+    
+    return optimized_code
