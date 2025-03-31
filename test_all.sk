@@ -15,8 +15,9 @@ if os.system("snake examples/logical_operators.sk") != 0:
 if os.system("snake examples/enums.sk") != 0:
     print("Test failed: enums.sk");
     sys.exit(1);
-if os.system("snake examples/list_type_check.sk") != 0:
-    print("Test failed (as expected): list_type_check.sk");
+if os.system("snake examples/list_type_check.sk") == 0:
+    print("Test failed: list_type_check.sk");
+    sys.exit(1);
 if os.system("snake examples/math_example.sk") != 0:
     print("Test failed: math_example.sk");
     sys.exit(1);
@@ -26,10 +27,12 @@ if os.system("snake examples/structs.sk") != 0:
 if os.system("snake examples/imports.sk") != 0:
     print("Test failed: imports.sk");
     sys.exit(1);
-if os.system("snake examples/dict_type_check.sk") != 0:
-    print("Test failed (as expected): dict_type_check.sk");
-if os.system("snake examples/type_check.sk") != 0:
-    print("Test failed (as expected): type_check.sk");
+if os.system("snake examples/dict_type_check.sk") == 0:
+    print("Test failed: dict_type_check.sk");
+    sys.exit(1);
+if os.system("snake examples/type_check.sk") == 0:
+    print("Test failed: type_check.sk");
+    sys.exit(1);
 if os.system("snake examples/argcv.sk test debug") != 0:
     print("Test failed: argcv.sk");
     sys.exit(1);
@@ -45,8 +48,9 @@ if os.system("snake examples/classes.sk") != 0:
 if os.system("snake examples/advanced_structs.sk") != 0:
     print("Test failed: advanced_structs.sk");
     sys.exit(1);
-if os.system("snake examples/struct_errors.sk") != 0:
-    print("Test failed (as expected): struct_errors.sk");
+if os.system("snake examples/struct_errors.sk") == 0:
+    print("Test failed: struct_errors.sk");
+    sys.exit(1);
 if os.system("snake examples/simple_struct.sk") != 0:
     print("Test failed: simple_struct.sk");
     sys.exit(1);
@@ -61,6 +65,9 @@ if os.system("snake examples/incdec.sk") != 0:
     sys.exit(1);
 if os.system("snake examples/add_remove.sk") != 0:
     print("Test failed: add_remove.sk");
+    sys.exit(1);
+if os.system("snake examples/static_type_test.sk") == 0:
+    print("Test failed: static_type_test.sk");
     sys.exit(1);
 
 print("All tests passed!");

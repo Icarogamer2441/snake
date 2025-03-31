@@ -247,7 +247,7 @@ def process_enums(source_code: str) -> Tuple[str, Dict[str, Any]]:
     
     # Regular expression to match enum definitions
     # This pattern captures the enum name and the entire body
-    enum_pattern = r'enum\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:((?:\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\s*:\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]*\])?\s*=\s*[^,\n]+)?)+)'
+    enum_pattern = r'enum\s+([a-zA-Z_][a-zA-z0-9_]*)\s*:((?:\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\s*:\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]*\])?\s*=\s*[^,\n]+)?)+)'
     
     # Find all enum definitions
     for match in re.finditer(enum_pattern, source_code):
@@ -327,7 +327,7 @@ def process_structs(source_code: str) -> Tuple[str, Dict[str, Any]]:
     struct_defs = {}
     
     # Regular expression to match struct definitions
-    struct_pattern = r'struct\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:((?:\s*[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]*\])?\s*;)*)'
+    struct_pattern = r'struct\s+([a-zA-Z_][a-zA-z0-9_]*)\s*:((?:\s*[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]*\])?\s*;)*)'
     
     # Find all struct definitions
     for match in re.finditer(struct_pattern, source_code):
@@ -485,13 +485,24 @@ class TypeChecker(ast.NodeVisitor):
         self.current_function = None
         self.variables = {}  # Track variable types in current scope
         self.return_seen = False
+        self.scopes = [{}]  # Stack of variable scopes for tracking variables in different contexts
+        self.current_scope = self.scopes[0]  # Current active scope
+        self.function_scopes = {}  # Store function scopes for reuse
+        self.inferred_types = {}  # Track inferred types from expressions
+        self.in_loop = False  # Track if we're in a loop
+        self.in_condition = False  # Track if we're in a conditional
     
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Check function definition for type consistency."""
         old_function = self.current_function
         old_variables = self.variables.copy()
+        old_scope = self.current_scope
+        
+        # Create a new scope for this function
         self.current_function = node.name
         self.variables = {}
+        self.scopes.append({})
+        self.current_scope = self.scopes[-1]
         self.return_seen = False
         
         # Get function type information
@@ -502,7 +513,9 @@ class TypeChecker(ast.NodeVisitor):
         # Check parameter types
         for arg in node.args.args:
             if hasattr(arg, 'arg') and arg.arg in param_types:
-                self.variables[arg.arg] = param_types[arg.arg]
+                param_type = param_types[arg.arg]
+                self.variables[arg.arg] = param_type
+                self.current_scope[arg.arg] = param_type
         
         # Visit function body
         for stmt in node.body:
@@ -512,9 +525,14 @@ class TypeChecker(ast.NodeVisitor):
         if return_type and return_type != 'None' and not self.return_seen:
             self.errors.append(f"Function '{node.name}' is missing a return statement")
         
+        # Store this function's scope for future reference
+        self.function_scopes[node.name] = self.current_scope.copy()
+        
         # Restore previous state
         self.current_function = old_function
         self.variables = old_variables
+        self.current_scope = old_scope
+        self.scopes.pop()
     
     def visit_Return(self, node: ast.Return) -> None:
         """Check return statement for type consistency."""
@@ -559,11 +577,12 @@ class TypeChecker(ast.NodeVisitor):
                 var_name = target.id
                 
                 # If this is the first assignment, record the type
-                if var_name not in self.variables:
+                if var_name not in self.current_scope:
                     # Check if we have type annotation
                     if var_name in self.type_annotations and 'type' in self.type_annotations[var_name]:
                         expected_type = self.type_annotations[var_name]['type']
                         self.variables[var_name] = expected_type
+                        self.current_scope[var_name] = expected_type
                         
                         # Check if the assigned value matches the type annotation
                         if value_type and not self.is_compatible_type(value_type, expected_type, node.value):
@@ -583,9 +602,12 @@ class TypeChecker(ast.NodeVisitor):
                         # No type annotation, infer from value
                         if value_type:
                             self.variables[var_name] = value_type
+                            self.current_scope[var_name] = value_type
+                            # Store the inferred type for future reference
+                            self.inferred_types[var_name] = value_type
                 else:
                     # This is a reassignment, check type compatibility
-                    expected_type = self.variables[var_name]
+                    expected_type = self.current_scope[var_name]
                     if value_type and not self.is_compatible_type(value_type, expected_type, node.value):
                         self.errors.append(
                             f"Variable '{var_name}' has type {expected_type}, "
@@ -603,6 +625,56 @@ class TypeChecker(ast.NodeVisitor):
                     # Check if we're trying to reassign a constant
                     if var_name in self.type_annotations and self.type_annotations[var_name].get('is_constant'):
                         self.errors.append(f"Cannot reassign constant '{var_name}'")
+            
+            elif isinstance(target, ast.Subscript):
+                # Handle dictionary or list updates
+                if isinstance(target.value, ast.Name):
+                    container_name = target.value.id
+                    
+                    # Check if this is a dictionary update
+                    if container_name in self.current_scope:
+                        container_type = self.current_scope[container_name]
+                        
+                        # Handle dictionary updates
+                        if container_type.startswith('dict['):
+                            # Extract key and value types from the container type
+                            key_value_types = container_type[5:-1].split(',')
+                            if len(key_value_types) == 2:
+                                expected_key_type = key_value_types[0].strip()
+                                expected_value_type = key_value_types[1].strip()
+                                
+                                # Check key type
+                                key_type = self.get_expr_type(target.slice)
+                                if key_type and not self.is_compatible_type(key_type, expected_key_type):
+                                    self.errors.append(
+                                        f"Dictionary '{container_name}' has key type {expected_key_type}, "
+                                        f"but is accessed with a key of type {key_type}"
+                                    )
+                                
+                                # Check value type
+                                if value_type and not self.is_compatible_type(value_type, expected_value_type):
+                                    self.errors.append(
+                                        f"Dictionary '{container_name}' has value type {expected_value_type}, "
+                                        f"but is assigned a value of type {value_type}"
+                                    )
+                        
+                        # Handle list updates
+                        elif container_type.startswith('list['):
+                            expected_elem_type = container_type[5:-1]
+                            
+                            # Check if index is an integer
+                            index_type = self.get_expr_type(target.slice)
+                            if index_type and index_type != 'int':
+                                self.errors.append(
+                                    f"List '{container_name}' index must be an integer, got {index_type}"
+                                )
+                            
+                            # Check element type
+                            if value_type and not self.is_compatible_type(value_type, expected_elem_type):
+                                self.errors.append(
+                                    f"List '{container_name}' has element type {expected_elem_type}, "
+                                    f"but is assigned a value of type {value_type}"
+                                )
     
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         """Check annotated assignment for type consistency."""
@@ -622,11 +694,12 @@ class TypeChecker(ast.NodeVisitor):
             
             # Record the variable type
             self.variables[var_name] = ann_type
+            self.current_scope[var_name] = ann_type
             
             # If there's a value, check its type
             if node.value:
                 value_type = self.get_expr_type(node.value)
-                if value_type and not self.is_compatible_type(value_type, ann_type):
+                if value_type and not self.is_compatible_type(value_type, ann_type, node.value):
                     self.errors.append(
                         f"Variable '{var_name}' has type {ann_type}, "
                         f"but is assigned a value of type {value_type}"
@@ -646,7 +719,69 @@ class TypeChecker(ast.NodeVisitor):
         for arg in node.args:
             self.visit(arg)
         
-        # Check if this is a call to a known function
+        # Visit keyword arguments
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+        
+        # Check if this is a method call on a list
+        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            obj_name = node.func.value.id
+            method_name = node.func.attr
+            
+            # Get the object type
+            obj_type = self.get_expr_type(node.func.value)
+            
+            # Check list methods that modify the list
+            if obj_type and obj_type.startswith('list['):
+                elem_type = obj_type[5:-1].strip()  # Extract element type
+                
+                # Check append method
+                if method_name == 'append' and len(node.args) == 1:
+                    arg_type = self.get_expr_type(node.args[0])
+                    if arg_type and not self.is_compatible_type(arg_type, elem_type, node.args[0]):
+                        self.errors.append(
+                            f"List '{obj_name}' has element type {elem_type}, "
+                            f"but append() was called with a value of type {arg_type}"
+                        )
+                
+                # Check insert method
+                elif method_name == 'insert' and len(node.args) >= 2:
+                    # First arg should be an index (int)
+                    index_type = self.get_expr_type(node.args[0])
+                    if index_type and index_type != 'int':
+                        self.errors.append(
+                            f"List '{obj_name}' insert() method requires an integer index, "
+                            f"but was called with an index of type {index_type}"
+                        )
+                    
+                    # Second arg should match the element type
+                    if len(node.args) > 1:
+                        arg_type = self.get_expr_type(node.args[1])
+                        if arg_type and not self.is_compatible_type(arg_type, elem_type, node.args[1]):
+                            self.errors.append(
+                                f"List '{obj_name}' has element type {elem_type}, "
+                                f"but insert() was called with a value of type {arg_type}"
+                            )
+                
+                # Check extend method
+                elif method_name == 'extend' and len(node.args) == 1:
+                    arg_type = self.get_expr_type(node.args[0])
+                    if arg_type:
+                        if not arg_type.startswith('list['):
+                            self.errors.append(
+                                f"List '{obj_name}' extend() method requires a list argument, "
+                                f"but was called with an argument of type {arg_type}"
+                            )
+                        else:
+                            # Check if the element types are compatible
+                            arg_elem_type = arg_type[5:-1].strip()
+                            if not self.is_compatible_type(arg_elem_type, elem_type, node.args[0]):
+                                self.errors.append(
+                                    f"List '{obj_name}' has element type {elem_type}, "
+                                    f"but extend() was called with a list of element type {arg_elem_type}"
+                                )
+        
+        # Continue with the original implementation for other function calls
         if isinstance(node.func, ast.Name):
             func_name = node.func.id
             
@@ -677,6 +812,41 @@ class TypeChecker(ast.NodeVisitor):
                                 f"Argument {i+1} to function '{func_name}' has type {arg_type}, "
                                 f"but parameter '{param_name}' has type {base_param_type}"
                             )
+                
+                # Check keyword arguments
+                for keyword in node.keywords:
+                    if keyword.arg in param_types:
+                        param_type = param_types[keyword.arg]
+                        arg_type = self.get_expr_type(keyword.value)
+                        
+                        # Extract the base type without default value
+                        base_param_type = param_type
+                        if '=' in param_type:
+                            base_param_type = param_type.split('=')[0].strip()
+                        
+                        if arg_type and not self.is_compatible_type(arg_type, base_param_type):
+                            self.errors.append(
+                                f"Keyword argument '{keyword.arg}' to function '{func_name}' has type {arg_type}, "
+                                f"but parameter '{keyword.arg}' has type {base_param_type}"
+                            )
+                    else:
+                        self.errors.append(f"Function '{func_name}' has no parameter named '{keyword.arg}'")
+        
+        # Check if this is a method call
+        elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            obj_name = node.func.value.id
+            method_name = node.func.attr
+            
+            # Get the object type
+            obj_type = self.get_expr_type(node.func.value)
+            
+            # Check if this is a method call on a struct
+            if obj_type in self.type_annotations:
+                struct_info = self.type_annotations.get(obj_type, {})
+                if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                    # This is a struct, check if the method exists
+                    # For now, we don't have method type information for structs
+                    pass
     
     def visit_Dict(self, node: ast.Dict) -> None:
         """Check dictionary elements for type consistency."""
@@ -721,13 +891,17 @@ class TypeChecker(ast.NodeVisitor):
             # Variable reference
             var_name = node.id
             
-            # Check if it's a known variable
-            if var_name in self.variables:
-                return self.variables[var_name]
+            # Check if it's a known variable in the current scope
+            if var_name in self.current_scope:
+                return self.current_scope[var_name]
             
             # Check if it's a variable with type annotation
             if var_name in self.type_annotations and 'type' in self.type_annotations[var_name]:
                 return self.type_annotations[var_name]['type']
+            
+            # Check if it's an inferred type
+            if var_name in self.inferred_types:
+                return self.inferred_types[var_name]
             
             return None
         
@@ -748,7 +922,69 @@ class TypeChecker(ast.NodeVisitor):
                 func_info = self.type_annotations.get(func_name, {})
                 return func_info.get('return')
             
-            # Method call or other complex call
+            # Method call
+            elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                obj_name = node.func.value.id
+                method_name = node.func.attr
+                
+                # Get the object type
+                obj_type = self.get_expr_type(node.func.value)
+                
+                # Check if this is a method call on a struct
+                if obj_type in self.type_annotations:
+                    struct_info = self.type_annotations.get(obj_type, {})
+                    if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                        # For now, we don't have method type information for structs
+                        # In the future, we could add method type information to struct definitions
+                        pass
+                
+                # Handle built-in methods for known types
+                if obj_type == 'str':
+                    if method_name in ['strip', 'lstrip', 'rstrip', 'upper', 'lower', 'title', 'capitalize']:
+                        return 'str'
+                    elif method_name in ['split', 'splitlines']:
+                        return 'list[str]'
+                    elif method_name in ['isdigit', 'isalpha', 'isalnum', 'startswith', 'endswith']:
+                        return 'bool'
+                    elif method_name == 'format':
+                        return 'str'
+                    elif method_name == 'add':  # Custom Snake method
+                        return 'str'
+                    elif method_name == 'remove':  # Custom Snake method
+                        return 'str'
+                    elif method_name == 'f':  # Custom Snake method
+                        return 'str'
+                
+                elif obj_type and obj_type.startswith('list['):
+                    if method_name in ['append', 'insert', 'remove', 'pop', 'clear', 'sort', 'reverse']:
+                        return 'None'
+                    elif method_name == 'count':
+                        return 'int'
+                    elif method_name == 'index':
+                        return 'int'
+                    elif method_name == 'copy':
+                        return obj_type
+                
+                elif obj_type and obj_type.startswith('dict['):
+                    if method_name in ['clear', 'pop', 'popitem', 'update']:
+                        return 'None'
+                    elif method_name == 'get':
+                        # Return the value type from dict[key_type, value_type]
+                        value_type = obj_type.split(',')[1].strip()[:-1]  # Remove trailing ']'
+                        return value_type
+                    elif method_name == 'keys':
+                        key_type = obj_type.split('[')[1].split(',')[0].strip()
+                        return f'list[{key_type}]'
+                    elif method_name == 'values':
+                        value_type = obj_type.split(',')[1].strip()[:-1]  # Remove trailing ']'
+                        return f'list[{value_type}]'
+                    elif method_name == 'items':
+                        key_type = obj_type.split('[')[1].split(',')[0].strip()
+                        value_type = obj_type.split(',')[1].strip()[:-1]  # Remove trailing ']'
+                        return f'list[tuple[{key_type}, {value_type}]]'
+                    elif method_name == 'copy':
+                        return obj_type
+            
             return None
         
         elif isinstance(node, ast.BinOp):
@@ -767,10 +1003,46 @@ class TypeChecker(ast.NodeVisitor):
                 # String concatenation
                 if isinstance(node.op, ast.Add) and left_type == 'str' and right_type == 'str':
                     return 'str'
+                
+                # String repetition
+                if isinstance(node.op, ast.Mult) and (
+                    (left_type == 'str' and right_type == 'int') or
+                    (left_type == 'int' and right_type == 'str')
+                ):
+                    return 'str'
+                
+                # List concatenation
+                if isinstance(node.op, ast.Add) and left_type and right_type and (
+                    left_type.startswith('list[') and right_type.startswith('list[')
+                ):
+                    # If element types match, preserve them
+                    left_elem_type = left_type[5:-1]
+                    right_elem_type = right_type[5:-1]
+                    if left_elem_type == right_elem_type:
+                        return f'list[{left_elem_type}]'
+                    return 'list'
+                
+                # List repetition
+                if isinstance(node.op, ast.Mult) and (
+                    (left_type and left_type.startswith('list[') and right_type == 'int') or
+                    (left_type == 'int' and right_type and right_type.startswith('list['))
+                ):
+                    list_type = left_type if left_type.startswith('list[') else right_type
+                    return list_type
             
             # Comparison operations
             elif isinstance(node.op, (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
                 return 'bool'
+            
+            # Bitwise operations
+            elif isinstance(node.op, (ast.BitOr, ast.BitAnd, ast.BitXor)):
+                if left_type == 'int' and right_type == 'int':
+                    return 'int'
+            
+            # Shift operations
+            elif isinstance(node.op, (ast.LShift, ast.RShift)):
+                if left_type == 'int' and right_type == 'int':
+                    return 'int'
             
             return None
         
@@ -787,6 +1059,9 @@ class TypeChecker(ast.NodeVisitor):
             if isinstance(node.op, (ast.UAdd, ast.USub)) and operand_type in ('int', 'float'):
                 return operand_type
             
+            if isinstance(node.op, ast.Invert) and operand_type == 'int':
+                return 'int'
+            
             return None
         
         elif isinstance(node, ast.Compare):
@@ -798,7 +1073,15 @@ class TypeChecker(ast.NodeVisitor):
             if node.elts:
                 # Try to determine element type from the first element
                 elem_type = self.get_expr_type(node.elts[0])
-                if elem_type:
+                
+                # Check if all elements have the same type
+                all_same_type = True
+                for elem in node.elts[1:]:
+                    if self.get_expr_type(elem) != elem_type:
+                        all_same_type = False
+                        break
+                
+                if all_same_type and elem_type:
                     return f'list[{elem_type}]'
             
             return 'list'
@@ -809,10 +1092,66 @@ class TypeChecker(ast.NodeVisitor):
                 # Try to determine key and value types from the first pair
                 key_type = self.get_expr_type(node.keys[0])
                 value_type = self.get_expr_type(node.values[0])
-                if key_type and value_type:
+                
+                # Check if all keys have the same type
+                all_keys_same_type = True
+                for key in node.keys[1:]:
+                    if self.get_expr_type(key) != key_type:
+                        all_keys_same_type = False
+                        break
+                
+                # Check if all values have the same type
+                all_values_same_type = True
+                for value in node.values[1:]:
+                    if self.get_expr_type(value) != value_type:
+                        all_values_same_type = False
+                        break
+                
+                if all_keys_same_type and all_values_same_type and key_type and value_type:
                     return f'dict[{key_type}, {value_type}]'
             
             return 'dict'
+        
+        elif isinstance(node, ast.Tuple):
+            # Tuple literal
+            if node.elts:
+                elem_types = []
+                for elem in node.elts:
+                    elem_type = self.get_expr_type(elem)
+                    if elem_type:
+                        elem_types.append(elem_type)
+                    else:
+                        elem_types.append('Any')
+                
+                if elem_types:
+                    return f'tuple[{", ".join(elem_types)}]'
+            
+            return 'tuple'
+        
+        elif isinstance(node, ast.Subscript):
+            # Subscript access (e.g., list[index] or dict[key])
+            value_type = self.get_expr_type(node.value)
+            
+            if value_type and value_type.startswith('list['):
+                # List access returns the element type
+                elem_type = value_type[5:-1]  # Remove 'list[' and ']'
+                return elem_type
+            
+            elif value_type and value_type.startswith('dict['):
+                # Dict access returns the value type
+                key_value_types = value_type[5:-1].split(',')
+                if len(key_value_types) == 2:
+                    return key_value_types[1].strip()
+            
+            elif value_type and value_type.startswith('tuple['):
+                # Tuple access with a constant index
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                    index = node.slice.value
+                    tuple_types = value_type[6:-1].split(',')  # Remove 'tuple[' and ']'
+                    if 0 <= index < len(tuple_types):
+                        return tuple_types[index].strip()
+            
+            return None
         
         elif isinstance(node, ast.Attribute):
             # Attribute access (e.g., obj.attr)
@@ -835,15 +1174,19 @@ class TypeChecker(ast.NodeVisitor):
     def is_compatible_type(self, actual_type: str, expected_type: str, node: Optional[ast.AST] = None) -> bool:
         """Check if actual_type is compatible with expected_type."""
         # All type is compatible with everything
-        if expected_type == 'All':
+        if expected_type == 'All' or expected_type == 'Any':
             return True
             
-        # Any type can be assigned to All
-        if actual_type == 'All':
+        # Any type can be assigned to All or Any
+        if actual_type == 'All' or actual_type == 'Any':
             return True
             
         # Exact match
         if actual_type == expected_type:
+            return True
+        
+        # None can be assigned to any optional type
+        if actual_type == 'None' and expected_type.startswith('Optional['):
             return True
         
         # int can be assigned to float
@@ -859,6 +1202,45 @@ class TypeChecker(ast.NodeVisitor):
         # For example, dict[str, int] can be assigned to dict
         if '[' in actual_type and actual_type.split('[')[0] == expected_type:
             return True
+        
+        # Check for tuple compatibility
+        if actual_type.startswith('tuple[') and expected_type.startswith('tuple['):
+            actual_types = actual_type[6:-1].split(',')
+            expected_types = expected_type[6:-1].split(',')
+            
+            # Check if the tuple has the same number of elements
+            if len(actual_types) != len(expected_types):
+                return False
+            
+            # Check if each element is compatible
+            for i in range(len(actual_types)):
+                if not self.is_compatible_type(actual_types[i].strip(), expected_types[i].strip()):
+                    return False
+            
+            return True
+        
+        # Check for list compatibility with element types
+        if actual_type.startswith('list[') and expected_type.startswith('list['):
+            actual_elem_type = actual_type[5:-1].strip()
+            expected_elem_type = expected_type[5:-1].strip()
+            
+            return self.is_compatible_type(actual_elem_type, expected_elem_type)
+        
+        # Check for dict compatibility with key and value types
+        if actual_type.startswith('dict[') and expected_type.startswith('dict['):
+            actual_types = actual_type[5:-1].split(',')
+            expected_types = expected_type[5:-1].split(',')
+            
+            if len(actual_types) != 2 or len(expected_types) != 2:
+                return False
+            
+            actual_key_type = actual_types[0].strip()
+            actual_value_type = actual_types[1].strip()
+            expected_key_type = expected_types[0].strip()
+            expected_value_type = expected_types[1].strip()
+            
+            return (self.is_compatible_type(actual_key_type, expected_key_type) and
+                    self.is_compatible_type(actual_value_type, expected_value_type))
         
         # Check for struct types
         for struct_name, struct_info in self.type_annotations.items():
@@ -1151,7 +1533,7 @@ def __snake_string_remove(string, value):
         
         # Process .add() method in expressions
         processed_line = line
-        add_expr_matches = list(re.finditer(r'([A-Za-z_][A-Za-z0-9_]*|"[^"]*"|\'[^\']*\')\s*\.\s*add\s*\(\s*(.*?)\s*\)', processed_line))
+        add_expr_matches = list(re.finditer(r'([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*add\s*\(\s*(.*?)\s*\)', processed_line))
         for match in reversed(add_expr_matches):  # Process in reverse to avoid messing up positions
             expr = match.group(1)
             value = match.group(2)
@@ -1159,7 +1541,7 @@ def __snake_string_remove(string, value):
             processed_line = processed_line[:start] + f"__snake_string_add({expr}, {value})" + processed_line[end:]
         
         # Process .remove() method in expressions
-        remove_expr_matches = list(re.finditer(r'([A-Za-z_][A-Za-z0-9_]*|"[^"]*"|\'[^\']*\')\s*\.\s*remove\s*\(\s*(.*?)\s*\)', processed_line))
+        remove_expr_matches = list(re.finditer(r'([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*remove\s*\(\s*(.*?)\s*\)', processed_line))
         for match in reversed(remove_expr_matches):  # Process in reverse to avoid messing up positions
             expr = match.group(1)
             value = match.group(2)

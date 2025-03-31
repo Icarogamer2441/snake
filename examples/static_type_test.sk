@@ -1,0 +1,25 @@
+# Static type checking example
+
+x: int = 10;
+
+x = "A";
+
+class Point:
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x;
+        self.y = y;
+        
+    def idk(self) -> str:
+        return 10;
+
+p: Point = Point(1, 2);
+
+print(p.idk());
+
+mydict: dict[str, int] = {"a": 1, "b": 2};
+
+mydict["c"] = 3.5;
+
+mylist: list[int] = [1, 2, 3];
+
+mylist.append(4.5);
