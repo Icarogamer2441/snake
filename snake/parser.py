@@ -67,6 +67,9 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process string format method
     source_code = process_string_format(source_code)
     
+    # Process custom list methods
+    source_code = process_list_methods(source_code)
+    
     # Add command-line arguments
     source_code = add_command_line_args(source_code)
     
@@ -786,78 +789,91 @@ class TypeChecker(ast.NodeVisitor):
                         else:
                             # Check if the element types are compatible
                             arg_elem_type = arg_type[5:-1].strip()
-                            if not self.is_compatible_type(arg_elem_type, elem_type, node.args[0]):
+                            if not self.is_compatible_type(arg_elem_type, elem_type):
                                 self.errors.append(
                                     f"List '{obj_name}' has element type {elem_type}, "
                                     f"but extend() was called with a list of element type {arg_elem_type}"
                                 )
-        
-        # Continue with the original implementation for other function calls
-        if isinstance(node.func, ast.Name):
-            func_name = node.func.id
-            
-            # Check if we have type information for this function
-            if func_name in self.type_annotations and 'params' in self.type_annotations[func_name]:
-                param_types = self.type_annotations[func_name]['params']
                 
-                # Check if the number of arguments matches (allowing for default parameters)
-                if len(node.args) > len(param_types):
-                    self.errors.append(
-                        f"Function '{func_name}' takes {len(param_types)} arguments, "
-                        f"but {len(node.args)} were given"
-                    )
-                    return
-                
-                # Check each argument type
-                for i, (param_name, param_type) in enumerate(param_types.items()):
-                    if i < len(node.args):
-                        arg_type = self.get_expr_type(node.args[i])
-                        
-                        # Extract the base type without default value
-                        base_param_type = param_type
-                        if '=' in param_type:
-                            base_param_type = param_type.split('=')[0].strip()
-                        
-                        if arg_type and not self.is_compatible_type(arg_type, base_param_type):
-                            self.errors.append(
-                                f"Argument {i+1} to function '{func_name}' has type {arg_type}, "
-                                f"but parameter '{param_name}' has type {base_param_type}"
-                            )
-                
-                # Check keyword arguments
-                for keyword in node.keywords:
-                    if keyword.arg in param_types:
-                        param_type = param_types[keyword.arg]
-                        arg_type = self.get_expr_type(keyword.value)
-                        
-                        # Extract the base type without default value
-                        base_param_type = param_type
-                        if '=' in param_type:
-                            base_param_type = param_type.split('=')[0].strip()
-                        
-                        if arg_type and not self.is_compatible_type(arg_type, base_param_type):
-                            self.errors.append(
-                                f"Keyword argument '{keyword.arg}' to function '{func_name}' has type {arg_type}, "
-                                f"but parameter '{keyword.arg}' has type {base_param_type}"
-                            )
-                    else:
-                        self.errors.append(f"Function '{func_name}' has no parameter named '{keyword.arg}'")
-        
-        # Check if this is a method call
-        elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
-            obj_name = node.func.value.id
-            method_name = node.func.attr
-            
-            # Get the object type
-            obj_type = self.get_expr_type(node.func.value)
-            
-            # Check if this is a method call on a struct
-            if obj_type in self.type_annotations:
-                struct_info = self.type_annotations.get(obj_type, {})
-                if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
-                    # This is a struct, check if the method exists
-                    # For now, we don't have method type information for structs
+                # Check printall method
+                elif method_name == 'printall' and len(node.args) == 0:
+                    # This is valid, no additional checks needed
                     pass
+            
+            # Check if printall() is called on a non-list object
+            elif method_name == 'printall' and len(node.args) == 0:
+                if not obj_type or not obj_type.startswith('list['):
+                    self.errors.append(
+                        f"Object '{obj_name}' of type {obj_type or 'unknown'} has no method 'printall()'. "
+                        f"The printall() method can only be used on list objects."
+                    )
+            
+            # Continue with the original implementation for other function calls
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                
+                # Check if we have type information for this function
+                if func_name in self.type_annotations and 'params' in self.type_annotations[func_name]:
+                    param_types = self.type_annotations[func_name]['params']
+                    
+                    # Check if the number of arguments matches (allowing for default parameters)
+                    if len(node.args) > len(param_types):
+                        self.errors.append(
+                            f"Function '{func_name}' takes {len(param_types)} arguments, "
+                            f"but {len(node.args)} were given"
+                        )
+                        return
+                    
+                    # Check each argument type
+                    for i, (param_name, param_type) in enumerate(param_types.items()):
+                        if i < len(node.args):
+                            arg_type = self.get_expr_type(node.args[i])
+                            
+                            # Extract the base type without default value
+                            base_param_type = param_type
+                            if '=' in param_type:
+                                base_param_type = param_type.split('=')[0].strip()
+                            
+                            if arg_type and not self.is_compatible_type(arg_type, base_param_type):
+                                self.errors.append(
+                                    f"Argument {i+1} to function '{func_name}' has type {arg_type}, "
+                                    f"but parameter '{param_name}' has type {base_param_type}"
+                                )
+                    
+                    # Check keyword arguments
+                    for keyword in node.keywords:
+                        if keyword.arg in param_types:
+                            param_type = param_types[keyword.arg]
+                            arg_type = self.get_expr_type(keyword.value)
+                            
+                            # Extract the base type without default value
+                            base_param_type = param_type
+                            if '=' in param_type:
+                                base_param_type = param_type.split('=')[0].strip()
+                            
+                            if arg_type and not self.is_compatible_type(arg_type, base_param_type):
+                                self.errors.append(
+                                    f"Keyword argument '{keyword.arg}' to function '{func_name}' has type {arg_type}, "
+                                    f"but parameter '{keyword.arg}' has type {base_param_type}"
+                                )
+                        else:
+                            self.errors.append(f"Function '{func_name}' has no parameter named '{keyword.arg}'")
+            
+            # Check if this is a method call
+            elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                obj_name = node.func.value.id
+                method_name = node.func.attr
+                
+                # Get the object type
+                obj_type = self.get_expr_type(node.func.value)
+                
+                # Check if this is a method call on a struct
+                if obj_type in self.type_annotations:
+                    struct_info = self.type_annotations.get(obj_type, {})
+                    if isinstance(struct_info, dict) and struct_info.get('kind') == 'struct':
+                        # This is a struct, check if the method exists
+                        # For now, we don't have method type information for structs
+                        pass
     
     def visit_Dict(self, node: ast.Dict) -> None:
         """Check dictionary elements for type consistency."""
@@ -967,7 +983,7 @@ class TypeChecker(ast.NodeVisitor):
                         return 'str'
                 
                 elif obj_type and obj_type.startswith('list['):
-                    if method_name in ['append', 'insert', 'remove', 'pop', 'clear', 'sort', 'reverse']:
+                    if method_name in ['append', 'insert', 'remove', 'pop', 'clear', 'sort', 'reverse', 'printall']:
                         return 'None'
                     elif method_name == 'count':
                         return 'int'
@@ -975,7 +991,7 @@ class TypeChecker(ast.NodeVisitor):
                         return 'int'
                     elif method_name == 'copy':
                         return obj_type
-                
+            
                 elif obj_type and obj_type.startswith('dict['):
                     if method_name in ['clear', 'pop', 'popitem', 'update']:
                         return 'None'
@@ -1589,6 +1605,43 @@ def __snake_format(string, *args, **kwargs):
     return helper_function + source_code
 
 
+def process_list_methods(source_code: str) -> str:
+    """
+    Process custom list methods (printall()) in the source code.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with custom list methods processed
+    """
+    # Function to process a single line
+    def process_line(line):
+        # Skip processing if the line is a comment or a string literal
+        if line.strip().startswith('#'):
+            return line
+        
+        # Process printall() method
+        printall_pattern = r'([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*printall\s*\(\s*\)'
+        printall_matches = list(re.finditer(printall_pattern, line))
+        
+        for match in reversed(printall_matches):  # Process in reverse to avoid messing up positions
+            list_var = match.group(1)
+            start, end = match.span()
+            
+            # Replace with a for loop that prints each element with its index
+            replacement = f"for __i, __val in enumerate({list_var}): print(f\"Index {{__i}}: {{__val}}\")"
+            line = line[:start] + replacement + line[end:]
+        
+        return line
+    
+    # Process each line
+    lines = source_code.split('\n')
+    processed_lines = [process_line(line) for line in lines]
+    
+    return '\n'.join(processed_lines)
+
+
 def optimize_python_code(python_code: str) -> str:
     """
     Optimize the generated Python code to make it smaller and more efficient.
@@ -1723,6 +1776,9 @@ def parse_snake_code(source_code: str) -> str:
     
     # Process string format method
     source_code = process_string_format(source_code)
+    
+    # Process custom list methods
+    source_code = process_list_methods(source_code)
     
     # Add command-line arguments
     if '__name__' in source_code and '__main__' in source_code:

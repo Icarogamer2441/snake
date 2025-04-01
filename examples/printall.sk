@@ -1,0 +1,5 @@
+mylist: list[int] = [1, 2, 3];
+
+mylist.printall(); # this should be an abbreviation for
+# for i, val in enumerate(mylist):
+#     print("Index {}: {}".format(i, val))

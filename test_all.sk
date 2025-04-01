@@ -72,6 +72,9 @@ if os.system("snake examples/static_type_test.sk") == 0:
 if os.system("snake examples/main_func.sk") != 0:
     print("Test failed: main_func.sk");
     sys.exit(1);
+if os.system("snake examples/printall.sk") != 0:
+    print("Test failed: printall.sk");
+    sys.exit(1);
 
 print("All tests passed!");
 sys.exit(0);
