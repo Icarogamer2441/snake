@@ -71,7 +71,7 @@ def run_snake_file(file_path: str, check_only: bool = False, output_file: Option
         code_obj = compile(python_code, file_path, 'exec')
         
         # Create a new namespace for execution
-        namespace = {}
+        namespace = {'__name__': '__main__'}
         
         # Execute the code
         exec(code_obj, namespace)

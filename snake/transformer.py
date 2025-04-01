@@ -22,6 +22,10 @@ class SnakeTransformer(ast.NodeTransformer):
                      if isinstance(info, dict) and info.get('kind') == 'enum'}
         self.constants = {name for name, info in type_annotations.items() 
                         if isinstance(info, dict) and info.get('is_constant')}
+        self.exports = {name for name, info in type_annotations.items()
+                      if isinstance(info, dict) and info.get('is_exported')}
+        self.has_main = any(info.get('is_main', False) for info in type_annotations.values() 
+                          if isinstance(info, dict))
     
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         """
@@ -139,6 +143,16 @@ def transform_to_python(python_ast: ast.Module, type_annotations: Dict[str, Any]
     # Apply transformations
     transformer = SnakeTransformer(type_annotations)
     transformed_ast = transformer.visit(python_ast)
+    
+    # Add main function call if it exists and is exported
+    if transformer.has_main:
+        # Create an if __name__ == "__main__" block to call the main function
+        main_call_ast = ast.parse("""
+if __name__ == "__main__":
+    main()
+""").body
+        transformed_ast.body.extend(main_call_ast)
+    
     ast.fix_missing_locations(transformed_ast)
     
     # Convert the AST back to source code

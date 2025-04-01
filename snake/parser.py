@@ -38,7 +38,7 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
         - Dictionary of type annotations
     """
     # Process imports
-    source_code = process_imports(source_code, file_path)
+    source_code, imports = process_imports(source_code, file_path)
     
     # Process enum definitions
     source_code, enum_defs = process_enums(source_code)
@@ -48,6 +48,9 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     
     # Process constant definitions
     source_code, const_defs = process_constants(source_code)
+    
+    # Process export declarations
+    source_code, exports = process_exports(source_code)
     
     # Process type casts
     source_code = process_type_casts(source_code)
@@ -67,9 +70,6 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Add command-line arguments
     source_code = add_command_line_args(source_code)
     
-    # Remove semicolons at the end of lines
-    source_code = re.sub(r';(\s*\n|\s*$)', r'\1', source_code)
-    
     # Extract type annotations
     type_annotations = extract_type_annotations(source_code)
     
@@ -85,11 +85,20 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     for const_name, const_def in const_defs.items():
         type_annotations[const_name] = const_def
     
+    # Add exported function information to type annotations
+    for func_name, func_info in exports.items():
+        if func_name in type_annotations:
+            type_annotations[func_name].update(func_info)
+        else:
+            type_annotations[func_name] = func_info
+    
     # Parse the modified source code as Python
     try:
         python_ast = ast.parse(source_code)
     except SyntaxError as e:
-        raise SnakeSyntaxError(f"Invalid syntax: {e}", getattr(e, 'lineno', None), getattr(e, 'offset', None))
+        line = e.lineno
+        col = e.offset
+        raise SnakeSyntaxError(str(e), line, col)
     
     return python_ast, type_annotations
 
@@ -117,7 +126,7 @@ def find_library_path(lib_name: str) -> Optional[str]:
     return None
 
 
-def process_imports(source_code: str, file_path: str = None) -> str:
+def process_imports(source_code: str, file_path: str = None) -> Tuple[str, Dict[str, Any]]:
     """
     Process import statements in the source code.
     
@@ -126,7 +135,9 @@ def process_imports(source_code: str, file_path: str = None) -> str:
         file_path: Path to the source file (for resolving relative imports)
         
     Returns:
-        Modified source code with imports processed
+        Tuple containing:
+        - Modified source code with imports processed
+        - Dictionary of imported modules
     """
     # Pattern to match Snake file imports: import "file.sk";
     snake_file_import_pattern = r'import\s+"([^"]+\.sk)"\s*;'
@@ -155,7 +166,7 @@ def process_imports(source_code: str, file_path: str = None) -> str:
                 imported_code = f.read()
             
             # Process the imported code recursively
-            imported_code = process_imports(imported_code, import_path)
+            imported_code, _ = process_imports(imported_code, import_path)
             
             # Replace the import statement with the processed code
             source_code = source_code.replace(import_stmt, imported_code)
@@ -187,7 +198,7 @@ def process_imports(source_code: str, file_path: str = None) -> str:
                 lib_code = f.read()
             
             # Process the library code recursively
-            lib_code = process_imports(lib_code, main_file)
+            lib_code, _ = process_imports(lib_code, main_file)
             
             # Replace the import statement with the processed code
             source_code = source_code.replace(import_stmt, lib_code)
@@ -228,7 +239,7 @@ def process_imports(source_code: str, file_path: str = None) -> str:
         python_import_code = '\n'.join(python_imports)
         source_code = source_code.replace(import_stmt, python_import_code)
     
-    return source_code
+    return source_code, {}
 
 
 def process_enums(source_code: str) -> Tuple[str, Dict[str, Any]]:
@@ -738,7 +749,7 @@ class TypeChecker(ast.NodeVisitor):
                 # Check append method
                 if method_name == 'append' and len(node.args) == 1:
                     arg_type = self.get_expr_type(node.args[0])
-                    if arg_type and not self.is_compatible_type(arg_type, elem_type, node.args[0]):
+                    if arg_type and not self.is_compatible_type(arg_type, elem_type):
                         self.errors.append(
                             f"List '{obj_name}' has element type {elem_type}, "
                             f"but append() was called with a value of type {arg_type}"
@@ -757,7 +768,7 @@ class TypeChecker(ast.NodeVisitor):
                     # Second arg should match the element type
                     if len(node.args) > 1:
                         arg_type = self.get_expr_type(node.args[1])
-                        if arg_type and not self.is_compatible_type(arg_type, elem_type, node.args[1]):
+                        if arg_type and not self.is_compatible_type(arg_type, elem_type):
                             self.errors.append(
                                 f"List '{obj_name}' has element type {elem_type}, "
                                 f"but insert() was called with a value of type {arg_type}"
@@ -1759,26 +1770,33 @@ def process_increment_decrement(source_code: str) -> str:
     return '\n'.join(processed_lines)
 
 
-def process_string_format(source_code: str) -> str:
+def process_exports(source_code: str) -> Tuple[str, Dict[str, Any]]:
     """
-    Process string format method (.f()) in the source code.
+    Process export declarations in the source code.
     
     Args:
         source_code: The Snake source code
         
     Returns:
-        Modified source code with .f() method replaced with .format()
+        Tuple containing:
+        - Modified source code with export keywords removed
+        - Dictionary of exported function information
     """
-    # Add string format helper function
-    helper_function = """
-# String format helper function
-def __snake_format(string, *args, **kwargs):
-    return string.format(*args, **kwargs)
-
-"""
+    exports = {}
     
-    # Replace .f() with .format()
-    format_pattern = r'\.f\('
-    source_code = re.sub(format_pattern, '.format(', source_code)
+    # Regular expression to match export declarations
+    export_pattern = r'export\s+def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\('
     
-    return helper_function + source_code
+    # Find all export declarations
+    for match in re.finditer(export_pattern, source_code):
+        func_name = match.group(1)
+        exports[func_name] = {'is_exported': True}
+        
+        # Check if this is the main function
+        if func_name == 'main':
+            exports[func_name]['is_main'] = True
+    
+    # Remove the export keyword from the source code
+    modified_code = re.sub(r'export\s+def', 'def', source_code)
+    
+    return modified_code, exports

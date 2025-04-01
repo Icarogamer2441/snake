@@ -1,0 +1,9 @@
+# main functions are optional, but you can use them to make your code more organized
+
+export def main() -> None:
+    print("Hello, World!");
+
+# the export tells the compiler that the function named main(), will be the entry point of the program
+# and will be called when the program is run
+
+# note: the main function need to be named 'main' (obviously)
