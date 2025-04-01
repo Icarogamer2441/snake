@@ -70,6 +70,9 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process custom list methods
     source_code = process_list_methods(source_code)
     
+    # Process 'this' keyword in class methods
+    source_code = process_this_keyword(source_code)
+    
     # Add command-line arguments
     source_code = add_command_line_args(source_code)
     
@@ -1780,6 +1783,9 @@ def parse_snake_code(source_code: str) -> str:
     # Process custom list methods
     source_code = process_list_methods(source_code)
     
+    # Process 'this' keyword in class methods
+    source_code = process_this_keyword(source_code)
+    
     # Add command-line arguments
     if '__name__' in source_code and '__main__' in source_code:
         source_code = add_command_line_args(source_code)
@@ -1856,3 +1862,25 @@ def process_exports(source_code: str) -> Tuple[str, Dict[str, Any]]:
     modified_code = re.sub(r'export\s+def', 'def', source_code)
     
     return modified_code, exports
+
+
+def process_this_keyword(source_code: str) -> str:
+    """
+    Process 'this' keyword in class methods, replacing it with 'self'.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with 'this' replaced with 'self'
+    """
+    # Replace 'this' parameter in method definitions
+    # Pattern matches: def method_name(this, ...) or def method_name(this):
+    method_pattern = r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\s*this\s*([,\)])'
+    source_code = re.sub(method_pattern, r'def \1(self\2', source_code)
+    
+    # Replace 'this.' with 'self.' in method bodies
+    this_attr_pattern = r'this\.'
+    source_code = re.sub(this_attr_pattern, 'self.', source_code)
+    
+    return source_code

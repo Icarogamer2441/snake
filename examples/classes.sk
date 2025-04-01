@@ -1,14 +1,14 @@
 # Example of using classes in Snake
 class Person:
-    def __init__(self, name: str, age: int) -> None:
-        self.name = name;
-        self.age = age;
+    def __init__(this, name: str, age: int) -> None:
+        this.name = name;
+        this.age = age;
     
-    def greet(self) -> str:
-        return f"Hello, my name is {self.name} and I am {self.age} years old";
+    def greet(this) -> str:
+        return f"Hello, my name is {this.name} and I am {this.age} years old";
     
-    def is_adult(self) -> bool:
-        return self.age >= 18;
+    def is_adult(this) -> bool:
+        return this.age >= 18;
 
 # Create some Person objects
 alice: Person = Person("Alice", 25);
