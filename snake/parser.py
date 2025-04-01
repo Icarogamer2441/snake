@@ -58,8 +58,14 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
+    # Process for method syntax
+    source_code = process_for_method(source_code)
+    
     # Process increment/decrement operators
     source_code = process_increment_decrement(source_code)
+    
+    # Process static methods and property decorators
+    source_code = process_static_and_property(source_code)
     
     # Process custom string methods
     source_code = process_string_methods(source_code)
@@ -1771,8 +1777,14 @@ def parse_snake_code(source_code: str) -> str:
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
+    # Process for method syntax
+    source_code = process_for_method(source_code)
+    
     # Process increment/decrement operators
     source_code = process_increment_decrement(source_code)
+    
+    # Process static methods and property decorators
+    source_code = process_static_and_property(source_code)
     
     # Process custom string methods
     source_code = process_string_methods(source_code)
@@ -1884,3 +1896,97 @@ def process_this_keyword(source_code: str) -> str:
     source_code = re.sub(this_attr_pattern, 'self.', source_code)
     
     return source_code
+
+
+def process_static_and_property(source_code: str) -> str:
+    """
+    Process static methods and property decorators in the source code.
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with static methods and property decorators converted to Python
+    """
+    # Process each line to handle indentation correctly
+    lines = source_code.split('\n')
+    processed_lines = []
+    
+    for i, line in enumerate(lines):
+        # Skip processing if the line is a comment or empty
+        if line.strip().startswith('#') or not line.strip():
+            processed_lines.append(line)
+            continue
+        
+        # Process static method declarations
+        if 'static def ' in line:
+            # Get the indentation level
+            indent = line[:line.index('static')]
+            # Replace 'static def' with 'def', but keep the method name and parameters
+            method_line = line.replace('static def ', 'def ')
+            # Add the @staticmethod decorator on the previous line with the same indentation
+            processed_lines.append(f"{indent}@staticmethod")
+            processed_lines.append(method_line)
+        # Process property decorators
+        elif 'property def ' in line:
+            # Get the indentation level
+            indent = line[:line.index('property')]
+            # Replace 'property def' with 'def', but keep the method name and parameters
+            property_line = line.replace('property def ', 'def ')
+            # Add the @property decorator on the previous line with the same indentation
+            processed_lines.append(f"{indent}@property")
+            processed_lines.append(property_line)
+        else:
+            processed_lines.append(line)
+    
+    return '\n'.join(processed_lines)
+
+
+def process_for_method(source_code: str) -> str:
+    """
+    Process .for() method syntax for creating for loops.
+    Supports two patterns:
+    1. variable.for(iterable): - Variable is both the iterator and loop variable
+    2. iterable.for(variable): - Iterable is on the left, variable is in parentheses
+    3. iterable.for(var1, var2, ...): - Support for multiple variables (tuple unpacking)
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with .for() method converted to standard for loops
+    """
+    # Pattern to match variable.for(iterable): syntax (original)
+    var_for_pattern = r'^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*\.for\s*\((.*?)\):'
+    
+    # Pattern to match iterable.for(variable): syntax with single or multiple variables
+    # This pattern captures: indentation, iterable, and variable(s)
+    iterable_for_pattern = r'^(\s*)([^.]+?)\.for\s*\((.*?)\):'
+    
+    lines = source_code.split('\n')
+    processed_lines = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        
+        # Check for iterable.for(variable): pattern first (new syntax)
+        match_iterable = re.match(iterable_for_pattern, line)
+        if match_iterable:
+            indent, iterable, variables = match_iterable.groups()
+            # Replace with standard for loop syntax
+            # The variables part can be a single variable or multiple comma-separated variables
+            processed_lines.append(f"{indent}for {variables} in {iterable}:")
+        else:
+            # Check for variable.for(iterable): pattern (original syntax)
+            match_var = re.match(var_for_pattern, line)
+            if match_var:
+                indent, var_name, iterable = match_var.groups()
+                # Replace with standard for loop syntax
+                processed_lines.append(f"{indent}for {var_name} in {iterable}:")
+            else:
+                processed_lines.append(line)
+        
+        i += 1
+    
+    return '\n'.join(processed_lines)

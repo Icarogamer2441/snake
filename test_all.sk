@@ -75,6 +75,12 @@ if os.system("snake examples/main_func.sk") != 0:
 if os.system("snake examples/printall.sk") != 0:
     print("Test failed: printall.sk");
     sys.exit(1);
+if os.system("snake examples/tiny_for.sk") != 0:
+    print("Test failed: tiny_for.sk");
+    sys.exit(1);
+if os.system("snake examples/static_property.sk") != 0:
+    print("Test failed: static_property.sk");
+    sys.exit(1);
 
 print("All tests passed!");
 sys.exit(0);

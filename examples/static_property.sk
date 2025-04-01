@@ -1,0 +1,12 @@
+
+class MyClass:
+    static def my_static_method() -> None:
+        print("This is a static method");
+
+    property def my_property(this) -> int:
+        return 42;
+
+export def main() -> None:
+    my_class = MyClass();
+    my_class.my_static_method();
+    print(my_class.my_property);
