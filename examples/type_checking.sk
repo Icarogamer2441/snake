@@ -71,3 +71,10 @@ numbers: list[int] = [1, 2, 3, 4, 5];
 mixed: list[int] = [1, "two", 3];  # This will cause a type error
 
 print("This code has type errors and should not compile!");
+
+# pop type checking
+mylist: list[int] = [10, 20, 30];
+
+myvar: int = mylist.pop();
+
+myvar2: str = mylist.pop();

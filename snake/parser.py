@@ -804,6 +804,10 @@ class TypeChecker(ast.NodeVisitor):
                                     f"but extend() was called with a list of element type {arg_elem_type}"
                                 )
                 
+                # Check pop method
+                elif method_name == 'pop':
+                    return elem_type  # pop() returns an element of the list
+                
                 # Check printall method
                 elif method_name == 'printall' and len(node.args) == 0:
                     # This is valid, no additional checks needed
@@ -992,7 +996,7 @@ class TypeChecker(ast.NodeVisitor):
                         return 'str'
                 
                 elif obj_type and obj_type.startswith('list['):
-                    if method_name in ['append', 'insert', 'remove', 'pop', 'clear', 'sort', 'reverse', 'printall']:
+                    if method_name in ['append', 'insert', 'remove', 'clear', 'sort', 'reverse', 'printall']:
                         return 'None'
                     elif method_name == 'count':
                         return 'int'
@@ -1000,6 +1004,9 @@ class TypeChecker(ast.NodeVisitor):
                         return 'int'
                     elif method_name == 'copy':
                         return obj_type
+                    elif method_name == 'pop':
+                        elem_type = obj_type[5:-1].strip()  # Extract element type
+                        return elem_type
             
                 elif obj_type and obj_type.startswith('dict['):
                     if method_name in ['clear', 'pop', 'popitem', 'update']:
