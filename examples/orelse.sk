@@ -1,0 +1,16 @@
+a: int = int("b") orelse 0;
+# compiled to:
+# try:
+#     a = int("b")
+# except:
+#     a = 0
+
+print(a);
+
+# note: orelse can only be used with variable declarations
+# orelse is used to provide a fallback value if an expression raises an exception
+# if the expression succeeds, the result is returned; otherwise, the fallback value is returned
+
+b: float = float("10.5") orelse 0.0;
+
+print(b);

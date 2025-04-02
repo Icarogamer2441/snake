@@ -58,6 +58,9 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
+    # Process orelse expressions
+    source_code = process_orelse(source_code)
+    
     # Process for method syntax
     source_code = process_for_method(source_code)
     
@@ -1784,6 +1787,9 @@ def parse_snake_code(source_code: str) -> str:
     # Process logical operators
     source_code = process_logical_operators(source_code)
     
+    # Process orelse expressions
+    source_code = process_orelse(source_code)
+    
     # Process for method syntax
     source_code = process_for_method(source_code)
     
@@ -1993,6 +1999,53 @@ def process_for_method(source_code: str) -> str:
                 processed_lines.append(f"{indent}for {var_name} in {iterable}:")
             else:
                 processed_lines.append(line)
+        
+        i += 1
+    
+    return '\n'.join(processed_lines)
+
+
+def process_orelse(source_code: str) -> str:
+    """
+    Process 'orelse' expressions in the source code.
+    The 'orelse' keyword provides a fallback value when an expression raises an exception.
+    
+    Example:
+        a = expr orelse fallback;
+        
+    Compiles to:
+        try:
+            a = expr
+        except:
+            a = fallback
+    
+    Args:
+        source_code: The Snake source code
+        
+    Returns:
+        Modified source code with 'orelse' expressions converted to try-except blocks
+    """
+    # Pattern to match variable assignments with orelse
+    # Captures: indentation, variable, expression, fallback value
+    orelse_pattern = r'^(\s*)([A-Za-z_][A-Za-z0-9_]*(?:\s*:\s*[A-Za-z_][A-Za-z0-9_\[\],\s]*)?)\s*=\s*(.*?)\s+orelse\s+(.*?);'
+    
+    lines = source_code.split('\n')
+    processed_lines = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        match = re.match(orelse_pattern, line)
+        
+        if match:
+            indent, var_decl, expr, fallback = match.groups()
+            # Replace with try-except block
+            processed_lines.append(f"{indent}try:")
+            processed_lines.append(f"{indent}    {var_decl} = {expr}")
+            processed_lines.append(f"{indent}except:")
+            processed_lines.append(f"{indent}    {var_decl} = {fallback}")
+        else:
+            processed_lines.append(line)
         
         i += 1
     
