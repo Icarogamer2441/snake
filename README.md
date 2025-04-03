@@ -333,6 +333,60 @@ import "mylib";
 result = mylib.some_function();
 ```
 
+### Making a Project
+
+To make a project, run the following command:
+
+```bash
+snake snakeproj create project/directory
+```
+
+example:
+
+```bash
+mkdir -p test/myproject
+snake snakeproj create test/myproject
+```
+
+This will create a project in the `test/myproject` directory with the following structure:
+
+```
+test/
+└── myproject/
+    ├── src/
+    │   └── main.sk
+    ├── README.md
+    ├── config.sk
+    └── out/
+```
+
+You can then build the project with the following command:
+
+```bash
+snake snakeproj build
+```
+
+This will build the project and create a `out` directory with the following structure:
+
+```
+test/
+└── myproject/
+    ├── out/
+    │   └── outname.py
+    ├── src/
+    │   └── main.sk
+    ├── config.sk
+    └── README.md
+```
+
+You can then run the project with the following command:
+
+```bash
+snake snakeproj run
+```
+
+This will build the project and run the `outname.py` file.
+
 ## Development
 
 To install development dependencies:

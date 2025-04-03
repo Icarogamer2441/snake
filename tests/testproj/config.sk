@@ -1,0 +1,3 @@
+name: str = "test";
+description: str = "README.md";
+version: str = "0.1.0";
