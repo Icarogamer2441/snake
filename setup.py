@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="snake-lang",
-    version="0.3.0",
+    version="0.4.0",
     description="A statically typed superset of Python",
     author="Snake Team",
     packages=find_packages(),

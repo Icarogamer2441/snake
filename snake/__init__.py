@@ -2,7 +2,7 @@
 Snake: A statically typed superset of Python
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .parser import parse_snake
 from .transformer import transform_to_python
