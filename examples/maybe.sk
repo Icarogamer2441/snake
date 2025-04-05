@@ -1,0 +1,20 @@
+# the value of Maybe is a random boolean, and the value of Half is 0.5
+is_adult: bool = Maybe;
+is_minor: bool = Half;
+
+print("is it adult?:", is_adult, "Is it a minor?:", is_minor);
+
+print("Value of Maybe:", Maybe.value, "Value of Half:", Half.value);
+
+if is_adult == Half:
+    print("is_adult is Half");
+else:
+    print("is_adult is Maybe");
+
+if is_minor == Half:
+    print("is_minor is Half");
+else:
+    print("is_minor is Maybe");
+
+
+

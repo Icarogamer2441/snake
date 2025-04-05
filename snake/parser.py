@@ -7,6 +7,8 @@ import ast
 import re
 import os
 import json
+import random
+import functools # Import functools for total_ordering
 from typing import Dict, Any, Tuple, List, Optional
 
 
@@ -24,6 +26,79 @@ class SnakeSyntaxError(Exception):
         super().__init__(f"{message} at line {line}, column {column}" if line else message)
 
 
+# --- Modified Code: Definitions for Maybe and Half ---
+MAYBE_HALF_DEFINITIONS = """
+import random
+import functools # Import functools for total_ordering
+
+# Helper classes and instances for Maybe/Half types
+class __SnakeMaybeType:
+    # No fixed value, behavior is randomized
+    def __bool__(self):
+        # Randomly True or False when used in boolean context
+        return random.choice([True, False])
+
+    @property # <-- Make value a property
+    def value(self):
+        # Randomly True or False when .value is accessed
+        # Note: This is now a property, accessed in Snake as Maybe.value,
+        # which correctly calls this method in the generated Python.
+        return random.choice([True, False])
+
+    def __repr__(self):
+        return "Maybe"
+
+@functools.total_ordering # Automatically generates missing comparison methods
+class __SnakeHalfType:
+    value = 0.5 # Fixed float value
+
+    def __bool__(self):
+        # Always True in boolean context (represents uncertainty, not False)
+        return True
+
+    def __repr__(self):
+        return "Half"
+
+    # --- Comparison Methods ---
+    def __eq__(self, other):
+        # Compare other value to Half's fixed value (0.5)
+        try:
+            # Handles Half == number and number == Half
+            return self.value == float(other)
+        except (ValueError, TypeError):
+            # Cannot compare with non-numeric types
+            return NotImplemented 
+
+    def __lt__(self, other):
+        # Compare other value to Half's fixed value (0.5)
+        try:
+            # Handles Half < number and number > Half
+            return self.value < float(other)
+        except (ValueError, TypeError):
+             # Cannot compare with non-numeric types
+            return NotImplemented
+
+    # Properties for direct comparison access if needed (though Half == 0.5 etc. now works)
+    # Example: Can be used like `if Half.is_greater(x):`
+    def is_equal(self, other):
+        try: return float(other) == self.value
+        except: return False
+        
+    def is_less(self, other):
+        try: return float(other) < self.value
+        except: return False
+
+    def is_greater(self, other):
+        try: return float(other) > self.value
+        except: return False
+
+# Singleton instances
+Maybe = __SnakeMaybeType()
+Half = __SnakeHalfType()
+"""
+# --- End Modified Code ---
+
+
 def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Dict[str, Any]]:
     """
     Parse Snake code into a Python AST and extract type information.
@@ -37,6 +112,11 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
         - Python AST module
         - Dictionary of type annotations
     """
+    # --- Added Code: Prepend Maybe/Half definitions ---
+    # Inject Maybe/Half definitions early
+    source_code = MAYBE_HALF_DEFINITIONS + source_code
+    # --- End Added Code ---
+    
     # Process imports
     source_code, imports = process_imports(source_code, file_path)
     
@@ -921,6 +1001,11 @@ class TypeChecker(ast.NodeVisitor):
                 fields = struct_info.get('fields', {})
                 if node.attr not in fields:
                     self.errors.append(f"Struct '{obj_type}' has no field '{node.attr}'")
+        # --- Added Code: Check for Maybe/Half .value access ---
+        elif isinstance(node.value, ast.Name) and node.value.id in ['Maybe', 'Half']:
+            if node.attr != 'value':
+                self.errors.append(f"Type '{node.value.id}' has no attribute '{node.attr}'")
+        # --- End Added Code ---
     
     def get_expr_type(self, node: ast.expr) -> Optional[str]:
         """Determine the type of an expression."""
@@ -941,6 +1026,12 @@ class TypeChecker(ast.NodeVisitor):
             # Check if it's a variable with type annotation
             if var_name in self.type_annotations and 'type' in self.type_annotations[var_name]:
                 return self.type_annotations[var_name]['type']
+            
+            # --- Added Code: Handle Maybe/Half types ---
+            # Check if it's Maybe or Half
+            if var_name == 'Maybe' or var_name == 'Half':
+                return 'bool' # Treat Maybe/Half as compatible with bool
+            # --- End Added Code ---
             
             # Check if it's an inferred type
             if var_name in self.inferred_types:
@@ -1210,6 +1301,15 @@ class TypeChecker(ast.NodeVisitor):
                     fields = struct_info.get('fields', {})
                     if node.attr in fields:
                         return fields[node.attr]
+            # --- Added Code: Handle Maybe/Half .value access type ---
+            # Check if it's Maybe.value or Half.value
+            elif isinstance(node.value, ast.Name) and node.value.id == 'Maybe' and node.attr == 'value':
+                # Maybe.value returns a random bool
+                return 'bool' 
+            elif isinstance(node.value, ast.Name) and node.value.id == 'Half' and node.attr == 'value':
+                 # Half.value is the fixed float 0.5
+                return 'float'
+            # --- End Added Code ---
             
             return None
         
@@ -1240,15 +1340,40 @@ class TypeChecker(ast.NodeVisitor):
             return True
         
         # Check for generic types (e.g., list[int] is compatible with list)
-        if '[' in expected_type and expected_type.split('[')[0] == actual_type.split('[')[0]:
-            # For list types, we'll do deeper checking in check_list_elements
-            return True
-            
-        # Check if a parameterized type is assigned to a non-parameterized type
-        # For example, dict[str, int] can be assigned to dict
+        # --- Modified Code: Adjusted generic type check logic ---
+        # Check if actual_type is a specific version of expected_type (e.g., list[int] compatible with list)
         if '[' in actual_type and actual_type.split('[')[0] == expected_type:
-            return True
-        
+             return True
+
+        # Check if expected_type is a specific version of actual_type (e.g. list compatible with list[int] - less common, maybe disallow?)
+        # Let's keep the original logic for now, which checks compatibility more broadly.
+        # If we need stricter checks later, we can refine this.
+        if '[' in expected_type and expected_type.split('[')[0] == actual_type.split('[')[0]:
+            # Check detailed compatibility for known generics
+            if actual_type.startswith('list[') and expected_type.startswith('list['):
+                 actual_elem_type = actual_type[5:-1].strip()
+                 expected_elem_type = expected_type[5:-1].strip()
+                 # Allow assignment if expected is 'All' or types are compatible
+                 return expected_elem_type == 'All' or self.is_compatible_type(actual_elem_type, expected_elem_type)
+
+            if actual_type.startswith('dict[') and expected_type.startswith('dict['):
+                # Simplified check, relies on recursive calls for key/value compatibility
+                # Extract types safely
+                try:
+                    actual_key_type, actual_value_type = self._extract_dict_types(actual_type)
+                    expected_key_type, expected_value_type = self._extract_dict_types(expected_type)
+                    
+                    key_compatible = expected_key_type == 'All' or self.is_compatible_type(actual_key_type, expected_key_type)
+                    value_compatible = expected_value_type == 'All' or self.is_compatible_type(actual_value_type, expected_value_type)
+                    
+                    return key_compatible and value_compatible
+                except ValueError:
+                    return False # Malformed dict type string
+
+            # Fallback for other potential generics or if parsing fails
+            return True # Assume compatible if base types match
+        # --- End Modified Code ---
+
         # Check for tuple compatibility
         if actual_type.startswith('tuple[') and expected_type.startswith('tuple['):
             actual_types = actual_type[6:-1].split(',')
@@ -1300,6 +1425,16 @@ class TypeChecker(ast.NodeVisitor):
                 if actual_type == enum_name and expected_type == enum_name:
                     return True
         
+        # --- Added Code: Allow Maybe/Half assignment to bool ---
+        if expected_type == 'bool' and actual_type in ['Maybe', 'Half', 'bool']:
+             # We already handle actual_type == 'bool' above.
+             # Since get_expr_type returns 'bool' for Maybe/Half, this check might be redundant
+             # but let's keep it explicit for clarity if get_expr_type changes.
+             # The core logic is that get_expr_type maps Maybe/Half to 'bool',
+             # making them compatible via the exact match rule.
+             pass # This case is implicitly handled by get_expr_type returning 'bool'
+        # --- End Added Code ---
+
         return False
     
     def check_list_elements(self, node: ast.List, expected_type: str, var_name: str) -> None:
@@ -1406,6 +1541,31 @@ class TypeChecker(ast.NodeVisitor):
                     f"Field '{field_name}' in struct '{struct_name}' has type {expected_type}, "
                     f"but is assigned a value of type {arg_type}"
                 )
+
+    # --- Added Code: Helper to extract dict types ---
+    def _extract_dict_types(self, dict_type_str: str) -> Tuple[str, str]:
+         """Extracts key and value types from a dict type string like 'dict[key, value]'."""
+         if not dict_type_str.startswith('dict[') or not dict_type_str.endswith(']'):
+             raise ValueError("Invalid dict type format")
+
+         type_params = dict_type_str[5:-1]
+         bracket_count = 0
+         split_index = -1
+
+         for i, char in enumerate(type_params):
+             if char == '[': bracket_count += 1
+             elif char == ']': bracket_count -= 1
+             elif char == ',' and bracket_count == 0:
+                 split_index = i
+                 break
+
+         if split_index == -1:
+             raise ValueError("Could not find comma separator for dict types")
+
+         key_type = type_params[:split_index].strip()
+         value_type = type_params[split_index+1:].strip()
+         return key_type, value_type
+    # --- End Added Code ---
 
 
 def add_command_line_args(source_code: str) -> str:
