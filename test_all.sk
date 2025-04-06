@@ -87,6 +87,9 @@ if os.system("snake examples/orelse.sk") != 0:
 if os.system("snake examples/maybe.sk") != 0:
     print("Test failed: maybe.sk");
     sys.exit(1);
+if os.system("snake examples/easy_err.sk") == 0:
+    print("Test failed: easy_err.sk");
+    sys.exit(1);
 
 print("All tests passed!");
 sys.exit(0);

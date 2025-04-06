@@ -11,6 +11,8 @@ import random
 import functools # Import functools for total_ordering
 from typing import Dict, Any, Tuple, List, Optional
 
+from snake.error_processing import process_errors
+
 
 class SnakeNode:
     """Base class for all Snake AST nodes"""
@@ -120,6 +122,10 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Process imports
     source_code, imports = process_imports(source_code, file_path)
     
+    # Process error definitions
+    from snake.error_processing import process_errors
+    source_code, error_defs = process_errors(source_code)
+    
     # Process enum definitions
     source_code, enum_defs = process_enums(source_code)
     
@@ -179,6 +185,10 @@ def parse_snake(source_code: str, file_path: str = None) -> Tuple[ast.Module, Di
     # Add constant definitions to type annotations
     for const_name, const_def in const_defs.items():
         type_annotations[const_name] = const_def
+
+    # Add error definitions to type annotations
+    for err_name, err_def in error_defs.items():
+        type_annotations[err_name] = err_def
     
     # Add exported function information to type annotations
     for func_name, func_info in exports.items():

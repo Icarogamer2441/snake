@@ -1,0 +1,5 @@
+# here in snake, you can create errors in a easier way, like this:
+
+error BadCode(code: str, varis: list[str]) -> f"This code `{code}` is not a good code, fix it now! and these variables are so bad too! look: `{varis}`";
+
+raise BadCode("print(\"Hello, world!\")", ["name", "age", "height"]);
